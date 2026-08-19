@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 
-import { type ItemDetail, type TaxonomyEntry, api } from '../api'
+import { type ItemDetail, type TaxonomyEntry, api, formatPrice } from '../api'
 
 export type FormValues = {
   name: string
@@ -8,6 +8,7 @@ export type FormValues = {
   descriptor_notes: string
   price: string
   currency: string
+  quantity: string
   purchase_date: string
   serial_number: string
   room_id: string
@@ -20,6 +21,7 @@ export const emptyValues: FormValues = {
   descriptor_notes: '',
   price: '',
   currency: 'SEK',
+  quantity: '1',
   purchase_date: '',
   serial_number: '',
   room_id: '',
@@ -33,6 +35,7 @@ export function valuesFromItem(item: ItemDetail): FormValues {
     descriptor_notes: item.descriptor_notes ?? '',
     price: item.purchase_price_minor === null ? '' : String(item.purchase_price_minor / 100),
     currency: item.currency ?? 'SEK',
+    quantity: String(item.quantity),
     purchase_date: item.purchase_date ?? '',
     serial_number: item.serial_number ?? '',
     room_id: item.room?.id ?? '',
@@ -50,6 +53,7 @@ export function toPayload(values: FormValues, suggested: string[]): Record<strin
     room_id: values.room_id || null,
     category_id: values.category_id || null,
     purchase_date: values.purchase_date || null,
+    quantity: Math.max(1, Math.round(Number(values.quantity) || 1)),
     ai_suggested_fields: suggested,
   }
   const price = values.price.trim()
@@ -84,6 +88,10 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
 
   const set = (field: keyof FormValues) => (event: { target: { value: string } }) =>
     onChange({ ...values, [field]: event.target.value })
+
+  const quantity = Math.max(1, Math.round(Number(values.quantity) || 1))
+  const unitPrice = values.price.trim() === '' ? null : Math.round(Number(values.price) * 100)
+  const total = unitPrice === null || Number.isNaN(unitPrice) ? null : unitPrice * quantity
 
   const mark = (field: string) => (suggested.includes(field) ? 'suggested' : undefined)
   const badge = (field: string) =>
@@ -137,7 +145,7 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
 
       <div className="row">
         <label>
-          <span>Price</span>
+          <span>Price{quantity > 1 ? ' each' : ''}</span>
           <input
             value={values.price}
             onChange={set('price')}
@@ -149,7 +157,24 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
           <span>Currency</span>
           <input value={values.currency} onChange={set('currency')} maxLength={3} />
         </label>
+        <label className="currency-field">
+          <span>How many{badge('quantity')}</span>
+          <input
+            value={values.quantity}
+            onChange={set('quantity')}
+            className={mark('quantity')}
+            inputMode="numeric"
+            min={1}
+            type="number"
+          />
+        </label>
       </div>
+
+      {total !== null && quantity > 1 && (
+        <p className="muted numeric" style={{ marginTop: 'calc(-1 * var(--s-2))', marginBottom: 'var(--s-4)' }}>
+          {quantity} x {formatPrice(unitPrice, values.currency)} = {formatPrice(total, values.currency)}
+        </p>
+      )}
 
       <div className="row">
         <label>

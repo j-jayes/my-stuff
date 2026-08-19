@@ -46,6 +46,7 @@ def to_summary(item: Item) -> ItemSummary:
         category=_ref(item.category),
         purchase_price_minor=item.purchase_price_minor,
         currency=item.currency,
+        quantity=item.quantity,
         created_at=item.created_at,
     )
 

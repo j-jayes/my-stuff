@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { type ItemDetail as Item, api, formatPrice } from '../api'
+import { type ItemDetail as Item, api, formatPrice, lineTotal } from '../api'
 import { BackIcon } from '../components/Icons'
 import ItemForm, { type FormValues, toPayload, valuesFromItem } from '../components/ItemForm'
 
@@ -61,11 +61,16 @@ export default function ItemDetail() {
     ['Room', item.room?.name ?? null],
     ['Category', item.category?.name ?? null],
     ['Brand', item.brand],
+    ['How many', item.quantity > 1 ? String(item.quantity) : null],
     ['Purchased', item.purchase_date],
     ['Serial number', item.serial_number],
   ]
-  const price = formatPrice(item.purchase_price_minor, item.currency)
-  const numeric = new Set(['Purchased', 'Serial number'])
+  // With more than one, the headline figure is what the set is worth and the unit price is
+  // spelled out underneath; with one they are the same number and only one is shown.
+  const price = formatPrice(lineTotal(item), item.currency)
+  const each =
+    item.quantity > 1 ? formatPrice(item.purchase_price_minor, item.currency) : null
+  const numeric = new Set(['Purchased', 'Serial number', 'How many'])
 
   return (
     <>
@@ -106,7 +111,12 @@ export default function ItemDetail() {
           ) : (
             <>
               <h1>{item.name}</h1>
-              {price && <p className="numeric" style={{ marginTop: 'var(--s-2)' }}>{price}</p>}
+              {price && (
+                <p className="numeric" style={{ marginTop: 'var(--s-2)' }}>
+                  {price}
+                  {each && <span className="muted"> ({each} each)</span>}
+                </p>
+              )}
 
               {item.descriptor_notes && (
                 <p className="muted" style={{ marginTop: 'var(--s-4)' }}>

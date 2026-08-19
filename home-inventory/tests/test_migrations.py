@@ -5,6 +5,7 @@ All offline — no bucket, no network.
 """
 
 import sqlalchemy as sa
+from alembic import command
 
 from app import db
 from app.models import Base
@@ -41,10 +42,20 @@ def test_a_new_database_is_built_to_match_the_orm(settings):
 
 def test_a_pre_alembic_database_is_adopted_rather_than_rebuilt(settings):
     """The deployed file was created by create_all and has no alembic_version table. It must
-    be stamped at the baseline and carried forward, with its rows intact."""
+    be stamped at the baseline, carried forward to head, and keep its rows.
+
+    The old shape is built by migrating to the baseline and then dropping the version table,
+    rather than by create_all on today's metadata — create_all would build today's columns,
+    which is precisely what the deployed file does not have.
+    """
+    config = db._alembic_config()
     engine = sa.create_engine(f"sqlite:///{settings.db_path}")
-    Base.metadata.create_all(engine)
     with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, db.BASELINE_REVISION)
+        connection.execute(sa.text("DROP TABLE alembic_version"))
+    with engine.begin() as connection:
+        assert "quantity" not in {c["name"] for c in sa.inspect(connection).get_columns("items")}
         connection.execute(
             sa.text(
                 "INSERT INTO items (id, name, created_at, updated_at)"
@@ -62,10 +73,12 @@ def test_a_pre_alembic_database_is_adopted_rather_than_rebuilt(settings):
 
     engine = sa.create_engine(f"sqlite:///{settings.db_path}")
     with engine.connect() as connection:
-        assert (
-            connection.execute(sa.text("SELECT name FROM items WHERE id='keep-me'")).scalar()
-            == "Steam iron"
-        )
+        row = connection.execute(
+            sa.text("SELECT name, quantity FROM items WHERE id='keep-me'")
+        ).one()
+        # The row survives, and a column added after it was written gets the default.
+        assert row.name == "Steam iron"
+        assert row.quantity == 1
         version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar()
     engine.dispose()
     assert version == db.head_revision()

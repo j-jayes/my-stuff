@@ -66,6 +66,7 @@ def _apply(item: Item, body: ItemWrite, fields_sent: set[str]) -> None:
         "descriptor_notes",
         "purchase_price_minor",
         "currency",
+        "quantity",
         "serial_number",
         "source_url",
         "room_id",

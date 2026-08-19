@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { type ItemSummary, type TaxonomyEntry, api, formatPrice } from '../api'
+import { type ItemSummary, type TaxonomyEntry, api, formatPrice, lineTotal } from '../api'
 import { BoxIcon } from '../components/Icons'
 
 export default function Inventory() {
@@ -133,7 +133,7 @@ export default function Inventory() {
       {!loading && items.length > 0 && (
         <div className="item-grid">
           {items.map((item) => {
-            const price = formatPrice(item.purchase_price_minor, item.currency)
+            const price = formatPrice(lineTotal(item), item.currency)
             return (
               <Link className="tile" key={item.id} to={`/items/${item.id}`}>
                 <div className="tile-frame">
@@ -145,7 +145,10 @@ export default function Inventory() {
                     </span>
                   )}
                 </div>
-                <span className="tile-name">{item.name}</span>
+                <span className="tile-name">
+                  {item.name}
+                  {item.quantity > 1 && <span className="tile-count"> x{item.quantity}</span>}
+                </span>
                 <span className="tile-meta">
                   {[item.brand, item.room?.name].filter(Boolean).join(' · ') || '—'}
                 </span>

@@ -194,3 +194,57 @@ def test_a_bad_replacement_image_leaves_the_existing_photo_intact(signed_in, pho
 
     assert rejected.status_code == 400
     assert signed_in.get(item["thumb_url"]).status_code == 200
+
+
+def test_an_item_is_one_of_a_thing_unless_told_otherwise(signed_in):
+    """Every row that existed before quantity did is a single object, so 1 is the default."""
+    item = create(signed_in)
+
+    assert item["quantity"] == 1
+
+
+def test_a_set_of_things_is_one_item_with_a_count(signed_in):
+    """Six drinking glasses are one line in the inventory, not six (FR-009)."""
+    item = create(
+        signed_in, name="Drinking glass", quantity=6, purchase_price_minor=4500, currency="SEK"
+    )
+
+    assert item["quantity"] == 6
+    # The price is per glass; the total is the caller's arithmetic, not a stored field.
+    assert item["purchase_price_minor"] == 4500
+
+    listed = signed_in.get("/api/items").json()["items"]
+    assert [i["quantity"] for i in listed if i["id"] == item["id"]] == [6]
+
+
+def test_a_quantity_below_one_is_refused(signed_in):
+    response = signed_in.post(
+        "/api/items", data={"payload": json.dumps({"name": "Nothing", "quantity": 0})}
+    )
+
+    assert response.status_code == 400
+
+
+def test_a_quantity_can_be_corrected_afterwards(signed_in):
+    item = create(signed_in, quantity=4)
+
+    updated = signed_in.patch(
+        f"/api/items/{item['id']}", data={"payload": json.dumps({"quantity": 2})}
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["quantity"] == 2
+    # A partial patch must not disturb anything it did not name.
+    assert updated.json()["name"] == "Ercol chair"
+
+
+def test_a_patch_that_says_nothing_about_quantity_leaves_it_alone(signed_in):
+    """quantity carries a default, so a partial patch must not silently reset a set of six
+    back to one."""
+    item = create(signed_in, quantity=6)
+
+    updated = signed_in.patch(
+        f"/api/items/{item['id']}", data={"payload": json.dumps({"brand": "Duralex"})}
+    )
+
+    assert updated.json()["quantity"] == 6

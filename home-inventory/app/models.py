@@ -52,6 +52,7 @@ class Item(Base):
     __tablename__ = "items"
     __table_args__ = (
         CheckConstraint("purchase_price_minor IS NULL OR purchase_price_minor >= 0"),
+        CheckConstraint("quantity >= 1", name="ck_items_quantity_positive"),
         Index("ix_items_room_id", "room_id"),
         Index("ix_items_category_id", "category_id"),
         Index("ix_items_created_at", "created_at"),
@@ -62,6 +63,8 @@ class Item(Base):
     brand: Mapped[str | None] = mapped_column(String)
     descriptor_notes: Mapped[str | None] = mapped_column(Text)
     purchase_price_minor: Mapped[int | None] = mapped_column(Integer)
+    # How many of the thing this row stands for. The price above is per one of them.
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     currency: Mapped[str | None] = mapped_column(String(3))
     purchase_date: Mapped[str | None] = mapped_column(String)
     serial_number: Mapped[str | None] = mapped_column(String)

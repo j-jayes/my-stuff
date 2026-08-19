@@ -11,6 +11,7 @@ export type ItemSummary = {
   category: NamedRef | null
   purchase_price_minor: number | null
   currency: string | null
+  quantity: number
   created_at: string
 }
 
@@ -159,6 +160,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ placements }),
     }),
+}
+
+/** What the line is worth: the unit price times how many there are. */
+export function lineTotal(item: {
+  purchase_price_minor: number | null
+  quantity: number
+}): number | null {
+  return item.purchase_price_minor === null ? null : item.purchase_price_minor * item.quantity
 }
 
 export function formatPrice(minor: number | null, currency: string | null): string | null {

@@ -499,6 +499,13 @@ label > span {
   color: var(--text);
 }
 
+/* A count rides along with the name rather than taking a line of its own — most items are
+   one of a thing, so this is a rare annotation and must not cost every tile a row. */
+.tile-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- gallery --------------------------------------------------------------------------- */
 
 .gallery {

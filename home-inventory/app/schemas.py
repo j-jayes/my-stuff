@@ -38,6 +38,7 @@ class ItemWrite(BaseModel):
     descriptor_notes: str | None = None
     purchase_price_minor: int | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
+    quantity: int = Field(default=1, ge=1)
     purchase_date: date | None = None
     serial_number: str | None = None
     source_url: str | None = None
@@ -82,6 +83,7 @@ class ItemSummary(BaseModel):
     # Carried on the summary so grid tiles can show a price without fetching each item.
     purchase_price_minor: int | None
     currency: str | None
+    quantity: int
     created_at: str
 
 
