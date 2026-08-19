@@ -1,59 +1,47 @@
-/* Mobile-first. Desktop is this layout, wider — never a separate design. */
+@import './styles/tokens.css';
 
-:root {
-  --bg: #faf8f5;
-  --surface: #ffffff;
-  --border: #e5e0d8;
-  --text: #23201c;
-  --muted: #7a7267;
-  --accent: #8a5a2b;
-  --accent-soft: #f2e7d9;
-  --danger: #a33a2a;
-  --radius: 12px;
-  --tap: 44px;
-  color-scheme: light dark;
-}
+/* Mobile-first. The desktop layout is a genuine second arrangement — a sidebar and a product
+ * grid — rather than the phone layout stretched wide.
+ */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17150f;
-    --surface: #211e18;
-    --border: #37322a;
-    --text: #efe9e0;
-    --muted: #a49a8c;
-    --accent: #d8a05e;
-    --accent-soft: #3a2f20;
-    --danger: #e08573;
-  }
-}
+/* ---- base ------------------------------------------------------------------------------ */
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
-  /* Keeps content clear of the iPhone home indicator and notch. */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 
-.app {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 16px calc(84px + env(safe-area-inset-bottom));
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  color: var(--accent);
+  letter-spacing: 0.01em;
+  margin: 0;
 }
 
 h1 {
-  font-size: 1.4rem;
-  margin: 20px 0 12px;
+  font-size: var(--step-3);
+  line-height: 1.2;
 }
 
 h2 {
-  font-size: 1.1rem;
-  margin: 20px 0 8px;
+  font-size: var(--step-2);
+  line-height: 1.25;
 }
 
 a {
@@ -61,40 +49,274 @@ a {
   text-decoration: none;
 }
 
-/* ---- controls ---- */
+p {
+  margin: 0;
+}
+
+img {
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* Numbers — prices, dates, counts, serial numbers — sit in mono. */
+.numeric {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+}
+
+.eyebrow {
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: var(--step--1);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* ---- app shell ------------------------------------------------------------------------- */
+
+.shell {
+  min-height: 100vh;
+}
+
+.main {
+  padding: var(--s-5) var(--s-4) calc(var(--s-8) + 56px + env(safe-area-inset-bottom));
+  max-width: var(--content-max);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+
+.section-head {
+  margin: var(--s-7) 0 var(--s-3);
+  padding-bottom: var(--s-2);
+  border-bottom: var(--rule) solid var(--border);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--step--1);
+  margin-bottom: var(--s-4);
+  min-height: var(--tap);
+}
+
+.back-link:hover {
+  color: var(--accent-strong);
+}
+
+/* ---- sidebar (desktop only) ------------------------------------------------------------ */
+
+.sidebar {
+  display: none;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  font-size: var(--step-2);
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  padding: var(--s-2) 0 var(--s-6);
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.side-nav a {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius);
+  color: var(--text);
+  min-height: 40px;
+}
+
+.side-nav a:hover {
+  background: var(--surface-sunken);
+}
+
+.side-nav a.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.side-group {
+  margin-top: var(--s-6);
+}
+
+.side-group .eyebrow {
+  display: block;
+  padding: 0 var(--s-3) var(--s-2);
+}
+
+.filter-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--step--1);
+  color: var(--text);
+  border-radius: var(--radius);
+  min-height: 34px;
+}
+
+.filter-list a:hover {
+  background: var(--surface-sunken);
+}
+
+.filter-list a.on {
+  color: var(--accent-strong);
+  font-weight: 700;
+  background: var(--accent-soft);
+}
+
+.filter-list .count {
+  color: var(--muted);
+}
+
+.filter-list a.on .count {
+  color: var(--accent-strong);
+}
+
+/* ---- bottom tab bar (phone and tablet) ------------------------------------------------- */
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--surface);
+  border-top: var(--rule) solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 20;
+}
+
+.tabbar a {
+  flex: 1;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.tabbar a.active {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+/* ---- controls -------------------------------------------------------------------------- */
 
 button,
 .button {
   min-height: var(--tap);
-  padding: 0 18px;
-  border: 1px solid var(--border);
+  padding: 0 var(--s-5);
+  border: var(--rule) solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
-  font: inherit;
-  font-weight: 500;
+  font-family: var(--font-body);
+  font-size: var(--step-0);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--s-2);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+button:hover:not(:disabled),
+.button:hover {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
 }
 
 button.primary,
 .button.primary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+button.primary:hover:not(:disabled),
+.button.primary:hover {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 button.danger {
   color: var(--danger);
+  border-color: var(--border-strong);
+}
+
+button.danger:hover:not(:disabled) {
   border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.quiet {
+  border-color: transparent;
+  background: none;
+  padding: 0 var(--s-2);
+  min-height: auto;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 button:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+.full {
+  width: 100%;
+}
+
+.shrink {
+  flex: none;
 }
 
 input,
@@ -102,181 +324,280 @@ select,
 textarea {
   width: 100%;
   min-height: var(--tap);
-  padding: 10px 12px;
-  border: 1px solid var(--border);
+  padding: var(--s-2) var(--s-3);
+  border: var(--rule) solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
+  font-family: var(--font-body);
   /* 16px keeps iOS Safari from zooming the viewport when a field is focused. */
-  font: 16px/1.4 inherit;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent-strong);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+input[type='search'] {
+  background: var(--surface);
 }
 
 textarea {
-  min-height: 84px;
+  min-height: 88px;
   resize: vertical;
 }
 
 label {
   display: block;
-  margin-bottom: 12px;
-  font-size: 0.85rem;
-  color: var(--muted);
+  margin-bottom: var(--s-4);
 }
 
 label > span {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: var(--s-1);
+  font-size: var(--step--1);
+  color: var(--muted);
 }
 
 .row {
   display: flex;
-  gap: 10px;
+  gap: var(--s-3);
 }
 
 .row > * {
   flex: 1;
 }
 
-.muted {
-  color: var(--muted);
-  font-size: 0.88rem;
+/* Actions sized to their labels rather than stretched across the column. */
+.actions {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.actions button {
+  min-width: 128px;
+}
+
+.currency-field {
+  max-width: 116px;
 }
 
 .error {
-  background: var(--accent-soft);
-  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  border-left: 3px solid var(--danger);
   color: var(--danger);
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  margin: 12px 0;
-  font-size: 0.9rem;
+  padding: var(--s-3) var(--s-4);
+  margin: var(--s-4) 0;
+  font-size: var(--step--1);
 }
 
-/* ---- navigation ---- */
-
-.nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding-bottom: env(safe-area-inset-bottom);
-  z-index: 20;
-}
-
-.nav a {
-  flex: 1;
-  min-height: 56px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  font-size: 0.7rem;
-  color: var(--muted);
-}
-
-.nav a.active {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.nav .glyph {
-  font-size: 1.25rem;
-}
-
-/* ---- item list and gallery ---- */
-
-.item-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.item-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  min-height: 64px;
-}
-
-.item-row img,
-.item-row .placeholder {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
-  object-fit: cover;
-  flex: none;
-  background: var(--accent-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gallery {
-  columns: 2 140px;
-  column-gap: 8px;
-}
-
-.gallery img {
-  width: 100%;
-  margin-bottom: 8px;
-  border-radius: var(--radius);
-  display: block;
-  break-inside: avoid;
-}
+/* ---- filter chips (phone and tablet) --------------------------------------------------- */
 
 .chips {
   display: flex;
-  gap: 8px;
+  gap: var(--s-2);
   overflow-x: auto;
-  padding: 4px 0 10px;
+  padding: var(--s-1) 0 var(--s-3);
   scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
 }
 
 .chip {
   flex: none;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 var(--s-4);
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: var(--rule) solid var(--border-strong);
   background: var(--surface);
-  font-size: 0.85rem;
+  font-size: var(--step--1);
+  color: var(--text);
 }
 
 .chip.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--on-accent);
+  font-weight: 700;
 }
 
-/* ---- capture ---- */
+.chip .count {
+  color: var(--muted);
+  margin-left: var(--s-1);
+}
+
+.chip.on .count {
+  color: var(--on-accent);
+  opacity: 0.85;
+}
+
+/* ---- item grid ------------------------------------------------------------------------- */
+
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-5) var(--s-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.tile-frame {
+  aspect-ratio: 4 / 5;
+  background: var(--surface-sunken);
+  border: var(--rule) solid var(--border);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tile-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease;
+}
+
+.tile:hover .tile-frame img {
+  transform: scale(1.03);
+}
+
+.tile:hover .tile-name {
+  color: var(--accent-strong);
+}
+
+.tile-empty {
+  color: var(--muted);
+  font-size: var(--step-3);
+}
+
+.tile-name {
+  font-size: var(--step-0);
+  line-height: 1.3;
+  color: var(--text-strong);
+}
+
+.tile-meta {
+  font-size: var(--step--1);
+  color: var(--muted);
+}
+
+.tile-price {
+  color: var(--text);
+}
+
+/* ---- gallery --------------------------------------------------------------------------- */
+
+.gallery {
+  columns: 2;
+  column-gap: var(--s-3);
+}
+
+.gallery a {
+  display: block;
+  break-inside: avoid;
+  margin-bottom: var(--s-3);
+}
+
+.gallery img {
+  width: 100%;
+  display: block;
+  border: var(--rule) solid var(--border);
+  transition: opacity 0.2s ease;
+}
+
+.gallery a:hover img {
+  opacity: 0.82;
+}
+
+/* ---- item detail ----------------------------------------------------------------------- */
+
+.detail-media img {
+  width: 100%;
+  display: block;
+  border: var(--rule) solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.spec {
+  border-top: var(--rule) solid var(--border);
+  margin: var(--s-5) 0 0;
+}
+
+.spec > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-5);
+  padding: var(--s-3) 0;
+  border-bottom: var(--rule) solid var(--border);
+}
+
+.spec dt {
+  color: var(--muted);
+  font-size: var(--step--1);
+  flex: none;
+}
+
+.spec dd {
+  margin: 0;
+  text-align: right;
+  color: var(--text-strong);
+}
+
+/* ---- capture --------------------------------------------------------------------------- */
 
 .capture {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 20px;
-  border: 2px dashed var(--border);
-  border-radius: var(--radius);
+  gap: var(--s-3);
+  padding: var(--s-7) var(--s-5);
+  border: var(--rule) dashed var(--border-strong);
   text-align: center;
   background: var(--surface);
+  align-items: center;
+}
+
+.capture .button {
+  min-width: 220px;
+}
+
+.capture-mark {
+  color: var(--accent);
+  margin-bottom: var(--s-1);
 }
 
 .preview {
   width: 100%;
-  max-height: 40vh;
+  max-height: 46vh;
   object-fit: contain;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
+  background: var(--surface-sunken);
+  border: var(--rule) solid var(--border);
 }
 
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--step--1);
+  padding: var(--s-3) 0;
+}
+
+/* A field the model filled and the owner has not touched. */
 .suggested {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -284,25 +605,61 @@ label > span {
 
 .badge {
   display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.65rem;
+  margin-left: var(--s-2);
+  padding: 1px var(--s-2);
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  border-radius: var(--radius);
+  font-size: 0.62rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  vertical-align: 1px;
 }
 
-/* ---- board canvas ---- */
+/* ---- boards ---------------------------------------------------------------------------- */
+
+.board-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-3);
+}
+
+.board-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-3);
+  background: var(--surface);
+  border: var(--rule) solid var(--border);
+  min-height: 76px;
+}
+
+.board-card:hover {
+  border-color: var(--accent-strong);
+}
+
+.board-card img,
+.board-card .board-empty {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  flex: none;
+  background: var(--surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
 
 .canvas {
   position: relative;
   width: 100%;
+  /* Must stay square: placements are stored in a 1000x1000 unit space, and x and y only map to
+   * the same pixel length while the box is square. A non-square canvas distorts saved layouts. */
   aspect-ratio: 1;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: var(--rule) solid var(--border);
   overflow: hidden;
   touch-action: none;
 }
@@ -313,33 +670,79 @@ label > span {
   cursor: grab;
   user-select: none;
   -webkit-user-drag: none;
-  border-radius: 6px;
+}
+
+.canvas img.selected {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
 }
 
 .tray {
   display: flex;
-  gap: 8px;
+  gap: var(--s-2);
   overflow-x: auto;
-  padding: 8px 0;
+  padding: var(--s-2) 0;
+  scrollbar-width: thin;
 }
 
 .tray img {
   width: 64px;
   height: 64px;
   object-fit: cover;
-  border-radius: 8px;
   flex: none;
   cursor: pointer;
+  border: var(--rule) solid var(--border);
 }
+
+.tray img:hover {
+  border-color: var(--accent-strong);
+}
+
+.tray img.placed {
+  opacity: 0.3;
+}
+
+/* ---- login ----------------------------------------------------------------------------- */
+
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-5);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+.login-card h1 {
+  font-size: var(--step-4);
+}
+
+.login-lede {
+  color: var(--muted);
+  margin: var(--s-2) 0 var(--s-6);
+}
+
+/* ---- spinner --------------------------------------------------------------------------- */
 
 .spinner {
   display: inline-block;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--accent-soft);
-  border-top-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent-strong);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
+  flex: none;
+}
+
+.centred {
+  display: flex;
+  justify-content: center;
+  padding: var(--s-8) 0;
 }
 
 @keyframes spin {
@@ -349,7 +752,138 @@ label > span {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
   .spinner {
-    animation-duration: 2s;
+    animation-duration: 1.2s !important;
+  }
+}
+
+/* ---- tablet ---------------------------------------------------------------------------- */
+
+@media (min-width: 768px) {
+  .main {
+    padding-left: var(--s-6);
+    padding-right: var(--s-6);
+  }
+
+  .item-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--s-6) var(--s-4);
+  }
+
+  .gallery {
+    columns: 3;
+  }
+
+  .board-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .detail {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s-7);
+    align-items: start;
+  }
+
+  .compose {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s-6);
+    align-items: start;
+  }
+}
+
+/* ---- desktop: sidebar replaces the tab bar --------------------------------------------- */
+
+@media (min-width: 1024px) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr;
+  }
+
+  /* display:none, deliberately: it removes these from the accessibility tree entirely, so a
+   * screen reader never meets two sets of the same navigation or the same filters. */
+  .tabbar,
+  .chips {
+    display: none;
+  }
+
+  .sidebar {
+    display: block;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: var(--s-5) var(--s-3);
+    border-right: var(--rule) solid var(--border);
+    background: var(--bg);
+  }
+
+  .main {
+    padding: var(--s-6) var(--s-7) var(--s-8);
+  }
+
+  .item-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--s-7) var(--s-5);
+  }
+
+  .gallery {
+    columns: 4;
+  }
+
+  .board-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .detail {
+    grid-template-columns: 58fr 42fr;
+    gap: var(--s-8);
+  }
+
+  .detail-media {
+    position: sticky;
+    top: var(--s-6);
+  }
+
+  .canvas-layout {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: var(--s-5);
+    align-items: start;
+  }
+
+  /* The canvas is square, so bounding its width by viewport height is what keeps the whole
+   * board and its save button on screen without scrolling. */
+  .canvas-layout .canvas {
+    max-width: 62vh;
+  }
+
+  /* On desktop the tray becomes a vertical rail beside the canvas. */
+  .canvas-layout .tray {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .search-wide {
+    max-width: 420px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .item-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .gallery {
+    columns: 5;
   }
 }

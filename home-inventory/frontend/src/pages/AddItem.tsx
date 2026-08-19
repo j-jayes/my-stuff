@@ -2,6 +2,7 @@ import { type ChangeEvent, type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api'
+import { CameraIcon } from '../components/Icons'
 import ItemForm, { type FormValues, emptyValues, toPayload } from '../components/ItemForm'
 
 type Mode = 'choose' | 'form'
@@ -41,9 +42,12 @@ export default function AddItem() {
         category_id: category?.id ?? '',
       }))
       setSuggested(
-        ['name', suggestion.brand && 'brand', suggestion.descriptor_notes && 'descriptor_notes', category && 'category'].filter(
-          Boolean,
-        ) as string[],
+        [
+          'name',
+          suggestion.brand && 'brand',
+          suggestion.descriptor_notes && 'descriptor_notes',
+          category && 'category',
+        ].filter(Boolean) as string[],
       )
     } catch {
       // Suggestion failing is a designed outcome, not an error: the form is still usable.
@@ -94,42 +98,49 @@ export default function AddItem() {
     return (
       <>
         <h1>Add something</h1>
-        <div className="capture">
-          <p style={{ margin: 0, fontSize: '2rem' }}>📷</p>
-          <label className="button primary" style={{ margin: 0 }}>
+
+        <div className="capture" style={{ marginTop: 'var(--s-5)' }}>
+          <span className="capture-mark">
+            <CameraIcon size={32} />
+          </span>
+          <label className="button primary">
             Take a photo
-            {/* accept="image/*" without image/heic makes iOS Safari hand over JPEG.
-                Adding heic here would flip it to HEIC — see research D5. */}
+            {/* accept="image/*" without image/heic is what makes iOS Safari hand over JPEG.
+                Adding heic here would flip it to HEIC — see research.md D5. */}
             <input
               type="file"
               accept="image/*"
               capture="environment"
               onChange={onPhotoChosen}
-              style={{ display: 'none' }}
+              hidden
             />
           </label>
-          <label className="button" style={{ margin: 0 }}>
+          <label className="button">
             Choose from library
-            <input type="file" accept="image/*" onChange={onPhotoChosen} style={{ display: 'none' }} />
+            <input type="file" accept="image/*" onChange={onPhotoChosen} hidden />
           </label>
         </div>
 
-        <h2>Or paste a product link</h2>
+        <h2 className="section-head">Or paste a product link</h2>
         <form onSubmit={fetchLink} className="row">
           <input
             type="url"
             value={link}
-            onChange={(e) => setLink(e.target.value)}
+            onChange={(event) => setLink(event.target.value)}
             placeholder="https://…"
             inputMode="url"
+            aria-label="Product page address"
           />
-          <button style={{ flex: 'none' }} disabled={!link || thinking}>
+          <button className="shrink" disabled={!link || thinking}>
             {thinking ? <span className="spinner" /> : 'Fetch'}
           </button>
         </form>
+
         {notice && <p className="error">{notice}</p>}
-        <p className="muted">
-          Or <button onClick={() => setMode('form')} style={{ minHeight: 'auto', padding: '2px 8px' }}>
+
+        <p className="muted" style={{ marginTop: 'var(--s-5)' }}>
+          Or{' '}
+          <button className="quiet" onClick={() => setMode('form')}>
             add it by hand
           </button>{' '}
           with no photo.
@@ -141,41 +152,51 @@ export default function AddItem() {
   return (
     <>
       <h1>New item</h1>
-      {previewUrl && <img src={previewUrl} alt="" className="preview" />}
-      {thinking && (
-        <p className="muted">
-          <span className="spinner" /> Working out what this is…
-        </p>
-      )}
-      {notice && <p className="error">{notice}</p>}
 
-      <ItemForm
-        values={values}
-        onChange={(next) => {
-          // Once the owner edits a field it stops being a suggestion.
-          const touched = (Object.keys(next) as (keyof FormValues)[]).filter(
-            (key) => next[key] !== values[key],
-          )
-          const stillSuggested = suggested.filter(
-            (field) => !touched.includes(field as keyof FormValues) && !(field === 'category' && touched.includes('category_id')),
-          )
-          setSuggested(stillSuggested)
-          setValues(next)
-        }}
-        suggested={suggested}
-        onSubmit={save}
-        submitLabel="Save item"
-        busy={saving}
-      />
+      <div className="compose" style={{ marginTop: 'var(--s-5)' }}>
+        <div className="stack">
+          {previewUrl && <img src={previewUrl} alt="" className="preview" />}
+          <label>
+            <span>Receipt or invoice photo (optional)</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setReceipt(event.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
 
-      <label style={{ marginTop: 16 }}>
-        <span>Receipt or invoice photo (optional)</span>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
-        />
-      </label>
+        <div>
+          {thinking && (
+            <p className="thinking">
+              <span className="spinner" /> Working out what this is…
+            </p>
+          )}
+          {notice && <p className="error">{notice}</p>}
+
+          <ItemForm
+            values={values}
+            onChange={(next) => {
+              // Once the owner edits a field it stops being a suggestion.
+              const touched = (Object.keys(next) as (keyof FormValues)[]).filter(
+                (key) => next[key] !== values[key],
+              )
+              setSuggested(
+                suggested.filter(
+                  (field) =>
+                    !touched.includes(field as keyof FormValues) &&
+                    !(field === 'category' && touched.includes('category_id')),
+                ),
+              )
+              setValues(next)
+            }}
+            suggested={suggested}
+            onSubmit={save}
+            submitLabel="Save item"
+            busy={saving}
+          />
+        </div>
+      </div>
     </>
   )
 }

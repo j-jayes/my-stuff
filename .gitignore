@@ -31,3 +31,6 @@ home-inventory/frontend/.playwright-mcp/
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# Local screenshot output from visual checks
+shots/

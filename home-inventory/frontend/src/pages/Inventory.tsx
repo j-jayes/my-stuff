@@ -1,17 +1,40 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
-import { type ItemSummary, type TaxonomyEntry, api } from '../api'
+import { type ItemSummary, type TaxonomyEntry, api, formatPrice } from '../api'
+import { BoxIcon } from '../components/Icons'
 
 export default function Inventory() {
+  const [params, setParams] = useSearchParams()
   const [items, setItems] = useState<ItemSummary[]>([])
   const [total, setTotal] = useState(0)
   const [rooms, setRooms] = useState<TaxonomyEntry[]>([])
   const [categories, setCategories] = useState<TaxonomyEntry[]>([])
-  const [q, setQ] = useState('')
-  const [roomId, setRoomId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
   const [loading, setLoading] = useState(true)
+
+  const roomId = params.get('room') ?? ''
+  const categoryId = params.get('category') ?? ''
+  const query = params.get('q') ?? ''
+
+  // The text box keeps its own state so typing stays instant, then syncs to the URL on the
+  // debounce. Writing every keystroke straight to the URL would flood browser history, which is
+  // why the sync below replaces rather than pushes.
+  const [text, setText] = useState(query)
+
+  useEffect(() => {
+    setText(query)
+  }, [query])
+
+  useEffect(() => {
+    if (text === query) return
+    const timer = setTimeout(() => {
+      const next = new URLSearchParams(params)
+      if (text) next.set('q', text)
+      else next.delete('q')
+      setParams(next, { replace: true })
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [text, query, params, setParams])
 
   useEffect(() => {
     api.rooms().then(setRooms).catch(() => {})
@@ -19,40 +42,58 @@ export default function Inventory() {
   }, [])
 
   useEffect(() => {
-    // Debounced so typing in the search box does not fire a request per keystroke.
-    const timer = setTimeout(() => {
-      setLoading(true)
-      api
-        .items({ q, room_id: roomId, category_id: categoryId, limit: 200 })
-        .then((page) => {
-          setItems(page.items)
-          setTotal(page.total)
-        })
-        .finally(() => setLoading(false))
-    }, 200)
-    return () => clearTimeout(timer)
-  }, [q, roomId, categoryId])
+    setLoading(true)
+    api
+      .items({ q: query, room_id: roomId, category_id: categoryId, limit: 200 })
+      .then((page) => {
+        setItems(page.items)
+        setTotal(page.total)
+      })
+      .finally(() => setLoading(false))
+  }, [query, roomId, categoryId])
 
-  const toggle = (current: string, value: string) => (current === value ? '' : value)
+  const toggleFilter = (key: 'room' | 'category', id: string) => {
+    const next = new URLSearchParams(params)
+    if (next.get(key) === id) next.delete(key)
+    else next.set(key, id)
+    setParams(next)
+  }
+
+  const filtered = Boolean(roomId || categoryId || query)
+
+  // Name the view after whatever is filtering it, so the heading confirms what the sidebar or
+  // chips just did rather than repeating the brand.
+  const heading =
+    rooms.find((r) => r.id === roomId)?.name ??
+    categories.find((c) => c.id === categoryId)?.name ??
+    'My Stuff'
 
   return (
     <>
-      <h1>My Stuff</h1>
+      <div className="page-head">
+        <h1>{heading}</h1>
+        <span className="muted numeric">{loading ? '' : `${total} item${total === 1 ? '' : 's'}`}</span>
+      </div>
+
       <input
         type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
+        className="search-wide"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
         placeholder="Search by name, brand, or notes"
+        aria-label="Search items"
       />
 
-      <div className="chips">
+      {/* Chip rows are the phone and tablet equivalent of the desktop sidebar filters. */}
+      <div className="chips" style={{ marginTop: 'var(--s-3)' }}>
         {rooms.map((room) => (
           <button
             key={room.id}
             className={`chip ${roomId === room.id ? 'on' : ''}`}
-            onClick={() => setRoomId((current) => toggle(current, room.id))}
+            onClick={() => toggleFilter('room', room.id)}
           >
-            {room.name} {room.item_count > 0 && <span className="muted">{room.item_count}</span>}
+            {room.name}
+            {room.item_count > 0 && <span className="count numeric">{room.item_count}</span>}
           </button>
         ))}
       </div>
@@ -61,45 +102,59 @@ export default function Inventory() {
           <button
             key={category.id}
             className={`chip ${categoryId === category.id ? 'on' : ''}`}
-            onClick={() => setCategoryId((current) => toggle(current, category.id))}
+            onClick={() => toggleFilter('category', category.id)}
           >
             {category.name}
           </button>
         ))}
       </div>
 
-      <p className="muted">
-        {loading ? <span className="spinner" /> : `${total} item${total === 1 ? '' : 's'}`}
-      </p>
-
-      {!loading && items.length === 0 && (
-        <div className="capture">
-          <p style={{ margin: 0 }}>Nothing here yet.</p>
-          <Link className="button primary" to="/add">
-            Add the first thing
-          </Link>
+      {loading && (
+        <div className="centred">
+          <span className="spinner" />
         </div>
       )}
 
-      <div className="item-list">
-        {items.map((item) => (
-          <Link className="item-row" key={item.id} to={`/items/${item.id}`}>
-            {item.thumb_url ? (
-              <img src={item.thumb_url} alt="" loading="lazy" />
-            ) : (
-              <span className="placeholder">📦</span>
-            )}
-            <span>
-              <strong>{item.name}</strong>
-              <br />
-              <span className="muted">
-                {[item.brand, item.room?.name, item.category?.name].filter(Boolean).join(' · ') ||
-                  'No details yet'}
-              </span>
-            </span>
-          </Link>
-        ))}
-      </div>
+      {!loading && items.length === 0 && (
+        <div className="capture" style={{ marginTop: 'var(--s-5)' }}>
+          <p>{filtered ? 'Nothing matches that.' : 'Nothing here yet.'}</p>
+          {filtered ? (
+            <Link className="button" to="/">
+              Clear filters
+            </Link>
+          ) : (
+            <Link className="button primary" to="/add">
+              Add the first thing
+            </Link>
+          )}
+        </div>
+      )}
+
+      {!loading && items.length > 0 && (
+        <div className="item-grid">
+          {items.map((item) => {
+            const price = formatPrice(item.purchase_price_minor, item.currency)
+            return (
+              <Link className="tile" key={item.id} to={`/items/${item.id}`}>
+                <div className="tile-frame">
+                  {item.thumb_url ? (
+                    <img src={item.thumb_url} alt="" loading="lazy" />
+                  ) : (
+                    <span className="tile-empty">
+                      <BoxIcon size={32} />
+                    </span>
+                  )}
+                </div>
+                <span className="tile-name">{item.name}</span>
+                <span className="tile-meta">
+                  {[item.brand, item.room?.name].filter(Boolean).join(' · ') || '—'}
+                </span>
+                {price && <span className="tile-meta tile-price numeric">{price}</span>}
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </>
   )
 }

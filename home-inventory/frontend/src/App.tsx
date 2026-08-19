@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 
 import { api } from './api'
+import { AddIcon, BoardsIcon, GalleryIcon, ItemsIcon } from './components/Icons'
+import Sidebar from './components/Sidebar'
 import AddItem from './pages/AddItem'
 import BoardCanvas from './pages/BoardCanvas'
 import Boards from './pages/Boards'
@@ -22,7 +24,7 @@ export default function App() {
 
   if (authed === null) {
     return (
-      <div className="app" style={{ paddingTop: 40, textAlign: 'center' }}>
+      <div className="centred">
         <span className="spinner" />
       </div>
     )
@@ -31,8 +33,13 @@ export default function App() {
   if (!authed) return <Login onSignedIn={() => setAuthed(true)} />
 
   return (
-    <>
-      <div className="app">
+    <div className="shell">
+      {/* Both navigations are always rendered and CSS shows one. Because the hidden one is
+          display:none it leaves the accessibility tree entirely, so a screen reader never meets
+          two sets of the same links. */}
+      <Sidebar />
+
+      <main className="main">
         <Routes>
           <Route path="/" element={<Inventory />} />
           <Route path="/add" element={<AddItem />} />
@@ -42,21 +49,26 @@ export default function App() {
           <Route path="/boards/:id" element={<BoardCanvas />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </div>
-      <nav className="nav">
+      </main>
+
+      <nav className="tabbar" aria-label="Sections">
         <NavLink to="/" end>
-          <span className="glyph">☰</span>Items
+          <ItemsIcon />
+          Items
         </NavLink>
         <NavLink to="/gallery">
-          <span className="glyph">▦</span>Gallery
+          <GalleryIcon />
+          Gallery
         </NavLink>
         <NavLink to="/add">
-          <span className="glyph">＋</span>Add
+          <AddIcon />
+          Add
         </NavLink>
         <NavLink to="/boards">
-          <span className="glyph">◫</span>Boards
+          <BoardsIcon />
+          Boards
         </NavLink>
       </nav>
-    </>
+    </div>
   )
 }

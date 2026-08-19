@@ -23,25 +23,27 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   return (
-    <div className="app" style={{ maxWidth: 380, paddingTop: '18vh' }}>
-      <h1>My Stuff</h1>
-      <p className="muted">Everything in the house, catalogued.</p>
-      <form onSubmit={submit}>
-        <label>
-          <span>Password</span>
-          <input
-            type="password"
-            value={password}
-            autoFocus
-            autoComplete="current-password"
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button className="primary" style={{ width: '100%' }} disabled={busy || !password}>
-          {busy ? <span className="spinner" /> : 'Sign in'}
-        </button>
-      </form>
+    <div className="login">
+      <div className="login-card">
+        <h1>My Stuff</h1>
+        <p className="login-lede">Everything in the house, catalogued.</p>
+        <form onSubmit={submit}>
+          <label>
+            <span>Password</span>
+            <input
+              type="password"
+              value={password}
+              autoFocus
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <button className="primary full" disabled={busy || !password}>
+            {busy ? <span className="spinner" /> : 'Sign in'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

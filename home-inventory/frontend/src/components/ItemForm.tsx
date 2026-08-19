@@ -145,7 +145,7 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
             placeholder="0.00"
           />
         </label>
-        <label style={{ maxWidth: 110 }}>
+        <label className="currency-field">
           <span>Currency</span>
           <input value={values.currency} onChange={set('currency')} maxLength={3} />
         </label>
@@ -162,7 +162,7 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
         </label>
       </div>
 
-      <button className="primary" style={{ width: '100%' }} disabled={busy || !values.name.trim()}>
+      <button className="primary full" disabled={busy || !values.name.trim()}>
         {busy ? <span className="spinner" /> : submitLabel}
       </button>
     </form>

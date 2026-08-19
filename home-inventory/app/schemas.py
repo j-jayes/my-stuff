@@ -79,13 +79,14 @@ class ItemSummary(BaseModel):
     thumb_url: str | None
     room: NamedRef | None
     category: NamedRef | None
+    # Carried on the summary so grid tiles can show a price without fetching each item.
+    purchase_price_minor: int | None
+    currency: str | None
     created_at: str
 
 
 class ItemDetail(ItemSummary):
     descriptor_notes: str | None
-    purchase_price_minor: int | None
-    currency: str | None
     purchase_date: str | None
     serial_number: str | None
     source_url: str | None

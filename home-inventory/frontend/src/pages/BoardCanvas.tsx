@@ -2,6 +2,7 @@ import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } f
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { type ItemSummary, api } from '../api'
+import { BackIcon } from '../components/Icons'
 
 /** Placements are stored in a fixed 1000x1000 unit space, so a board arranged on a laptop
  *  reopens correctly on a phone. The canvas element scales those units to whatever size it is. */
@@ -63,15 +64,18 @@ export default function BoardCanvas() {
   }
 
   function onDrag(event: ReactPointerEvent<HTMLImageElement>, itemId: string) {
-    if (!dragOffset.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return
+    const offset = dragOffset.current
+    if (!offset || !event.currentTarget.hasPointerCapture(event.pointerId)) return
     const point = toCanvasUnits(event.clientX, event.clientY)
+    // Read the offset into a local before the updater: React runs the updater later, and by then
+    // pointerup may have cleared the ref, which would throw mid-drag.
     setPlaced((current) =>
       current.map((p) =>
         p.item.id === itemId
           ? {
               ...p,
-              position_x: clamp(point.x - dragOffset.current!.x),
-              position_y: clamp(point.y - dragOffset.current!.y),
+              position_x: clamp(point.x - offset.x),
+              position_y: clamp(point.y - offset.y),
             }
           : p,
       ),
@@ -131,87 +135,99 @@ export default function BoardCanvas() {
 
   const current = placed.find((p) => p.item.id === selected)
 
+
   return (
     <>
-      <p className="muted">
-        <Link to="/boards">← All boards</Link>
-      </p>
+      <Link className="back-link" to="/boards">
+        <BackIcon /> All boards
+      </Link>
       <h1>{name}</h1>
 
-      <div className="canvas" ref={canvasRef} onPointerDown={() => setSelected(null)}>
-        {placed.map((p) => (
-          <img
-            key={p.item.id}
-            src={p.item.thumb_url!}
-            alt={p.item.name}
-            style={{
-              left: `${(p.position_x / CANVAS_UNITS) * 100}%`,
-              top: `${(p.position_y / CANVAS_UNITS) * 100}%`,
-              zIndex: p.z_index,
-              transform: `translate(-50%, -50%) scale(${p.scale})`,
-              outline: selected === p.item.id ? '2px solid var(--accent)' : 'none',
-            }}
-            onPointerDown={(event) => {
-              event.stopPropagation()
-              startDrag(event, p.item.id)
-            }}
-            onPointerMove={(event) => onDrag(event, p.item.id)}
-            onPointerUp={() => (dragOffset.current = null)}
-          />
-        ))}
-      </div>
+      <div className="canvas-layout" style={{ marginTop: 'var(--s-5)' }}>
+        <div>
+          <div className="canvas" ref={canvasRef} onPointerDown={() => setSelected(null)}>
+            {placed.map((p) => (
+              <img
+                key={p.item.id}
+                src={p.item.thumb_url!}
+                alt={p.item.name}
+                className={selected === p.item.id ? 'selected' : undefined}
+                style={{
+                  left: `${(p.position_x / CANVAS_UNITS) * 100}%`,
+                  top: `${(p.position_y / CANVAS_UNITS) * 100}%`,
+                  zIndex: p.z_index,
+                  transform: `translate(-50%, -50%) scale(${p.scale})`,
+                }}
+                onPointerDown={(event) => {
+                  event.stopPropagation()
+                  startDrag(event, p.item.id)
+                }}
+                onPointerMove={(event) => onDrag(event, p.item.id)}
+                onPointerUp={() => (dragOffset.current = null)}
+              />
+            ))}
+          </div>
 
-      {current && (
-        <div style={{ marginTop: 12 }}>
-          <label>
-            <span>Size — {current.item.name}</span>
-            <input
-              type="range"
-              min={0.3}
-              max={3}
-              step={0.05}
-              value={current.scale}
-              onChange={(e) => update(current.item.id, { scale: Number(e.target.value) })}
-            />
-          </label>
-          <div className="row">
-            <button
-              onClick={() =>
-                update(current.item.id, {
-                  z_index: placed.reduce((max, p) => Math.max(max, p.z_index), 0) + 1,
-                })
-              }
-            >
-              Bring to front
+          {current && (
+            <div style={{ marginTop: 'var(--s-4)' }}>
+              <label>
+                <span>Size — {current.item.name}</span>
+                <input
+                  type="range"
+                  min={0.3}
+                  max={3}
+                  step={0.05}
+                  value={current.scale}
+                  onChange={(event) =>
+                    update(current.item.id, { scale: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <div className="row">
+                <button
+                  onClick={() =>
+                    update(current.item.id, {
+                      z_index: placed.reduce((max, p) => Math.max(max, p.z_index), 0) + 1,
+                    })
+                  }
+                >
+                  Bring to front
+                </button>
+                <button className="danger" onClick={() => removeFromBoard(current.item.id)}>
+                  Take off board
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="row" style={{ marginTop: 'var(--s-5)' }}>
+            <button className="primary" onClick={save} disabled={!dirty || saving}>
+              {saving ? <span className="spinner" /> : dirty ? 'Save layout' : 'Saved'}
             </button>
-            <button className="danger" onClick={() => removeFromBoard(current.item.id)}>
-              Take off board
+            <button className="danger shrink" onClick={removeBoard}>
+              Delete board
             </button>
           </div>
         </div>
-      )}
 
-      <h2>Your things</h2>
-      <div className="tray">
-        {inventory.map((item) => (
-          <img
-            key={item.id}
-            src={item.thumb_url!}
-            alt={item.name}
-            title={item.name}
-            onClick={() => addToBoard(item)}
-            style={{ opacity: placed.some((p) => p.item.id === item.id) ? 0.35 : 1 }}
-          />
-        ))}
-      </div>
-
-      <div className="row" style={{ marginTop: 16 }}>
-        <button className="primary" onClick={save} disabled={!dirty || saving}>
-          {saving ? <span className="spinner" /> : dirty ? 'Save layout' : 'Saved'}
-        </button>
-        <button className="danger" style={{ flex: 'none' }} onClick={removeBoard}>
-          Delete board
-        </button>
+        <div>
+          <span className="eyebrow">Your things</span>
+          <div className="tray">
+            {inventory.map((item) => (
+              <img
+                key={item.id}
+                src={item.thumb_url!}
+                alt={item.name}
+                title={item.name}
+                onClick={() => addToBoard(item)}
+                className={placed.some((p) => p.item.id === item.id) ? 'placed' : undefined}
+              />
+            ))}
+          </div>
+          {inventory.length === 0 && (
+            <p className="muted">Photograph some things first and they will appear here.</p>
+          )}
+        </div>
       </div>
     </>
   )

@@ -9,13 +9,13 @@ export type ItemSummary = {
   thumb_url: string | null
   room: NamedRef | null
   category: NamedRef | null
+  purchase_price_minor: number | null
+  currency: string | null
   created_at: string
 }
 
 export type ItemDetail = ItemSummary & {
   descriptor_notes: string | null
-  purchase_price_minor: number | null
-  currency: string | null
   purchase_date: string | null
   serial_number: string | null
   source_url: string | null
@@ -83,15 +83,30 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 })
 
+let roomsCache: Promise<TaxonomyEntry[]> | null = null
+let categoriesCache: Promise<TaxonomyEntry[]> | null = null
+
+/** Drop the cached room and category lists. Called after any write to either, and after item
+ *  writes, because both carry item counts. */
+export function invalidateTaxonomy(): void {
+  roomsCache = null
+  categoriesCache = null
+}
+
 export const api = {
   login: (password: string) => request<void>('/api/auth/login', json({ password })),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   me: () => request<{ authenticated: boolean }>('/api/auth/me'),
 
-  rooms: () => request<TaxonomyEntry[]>('/api/rooms'),
-  categories: () => request<TaxonomyEntry[]>('/api/categories'),
-  addRoom: (name: string) => request<TaxonomyEntry>('/api/rooms', json({ name })),
-  addCategory: (name: string) => request<TaxonomyEntry>('/api/categories', json({ name })),
+  // Rooms and categories are wanted by both the sidebar and the inventory page, and they change
+  // about once a year. Cache the in-flight promise so navigating does not refetch them, and
+  // drop the cache whenever something writes to either list.
+  rooms: () => (roomsCache ??= request<TaxonomyEntry[]>('/api/rooms')),
+  categories: () => (categoriesCache ??= request<TaxonomyEntry[]>('/api/categories')),
+  addRoom: (name: string) =>
+    request<TaxonomyEntry>('/api/rooms', json({ name })).finally(invalidateTaxonomy),
+  addCategory: (name: string) =>
+    request<TaxonomyEntry>('/api/categories', json({ name })).finally(invalidateTaxonomy),
 
   items: (params: { q?: string; room_id?: string; category_id?: string; limit?: number }) => {
     const query = new URLSearchParams()
@@ -118,16 +133,21 @@ export const api = {
     form.append('payload', JSON.stringify(payload))
     if (image) form.append('image', image, 'photo.jpg')
     if (receipt) form.append('receipt', receipt, 'receipt.jpg')
-    return request<ItemDetail>('/api/items', { method: 'POST', body: form })
+    return request<ItemDetail>('/api/items', { method: 'POST', body: form }).finally(
+      invalidateTaxonomy,
+    )
   },
   updateItem: (id: string, payload: Record<string, unknown>, image?: Blob | null, receipt?: Blob | null) => {
     const form = new FormData()
     form.append('payload', JSON.stringify(payload))
     if (image) form.append('image', image, 'photo.jpg')
     if (receipt) form.append('receipt', receipt, 'receipt.jpg')
-    return request<ItemDetail>(`/api/items/${id}`, { method: 'PATCH', body: form })
+    return request<ItemDetail>(`/api/items/${id}`, { method: 'PATCH', body: form }).finally(
+      invalidateTaxonomy,
+    )
   },
-  deleteItem: (id: string) => request<void>(`/api/items/${id}`, { method: 'DELETE' }),
+  deleteItem: (id: string) =>
+    request<void>(`/api/items/${id}`, { method: 'DELETE' }).finally(invalidateTaxonomy),
 
   boards: () => request<BoardSummary[]>('/api/boards'),
   board: (id: string) => request<BoardDetail>(`/api/boards/${id}`),
@@ -143,5 +163,12 @@ export const api = {
 
 export function formatPrice(minor: number | null, currency: string | null): string | null {
   if (minor === null || !currency) return null
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(minor / 100)
+  // Whole amounts lose the ".00" — most things are bought at round prices and the decimals are
+  // just noise in a grid.
+  const whole = minor % 100 === 0
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: whole ? 0 : 2,
+  }).format(minor / 100)
 }

@@ -44,16 +44,18 @@ def to_summary(item: Item) -> ItemSummary:
         thumb_url=media_url(item.thumb_key),
         room=_ref(item.room),
         category=_ref(item.category),
+        purchase_price_minor=item.purchase_price_minor,
+        currency=item.currency,
         created_at=item.created_at,
     )
 
 
 def to_detail(item: Item) -> ItemDetail:
+    # Price and currency come through the summary spread; passing them again here would be a
+    # duplicate keyword argument.
     return ItemDetail(
         **to_summary(item).model_dump(),
         descriptor_notes=item.descriptor_notes,
-        purchase_price_minor=item.purchase_price_minor,
-        currency=item.currency,
         purchase_date=item.purchase_date,
         serial_number=item.serial_number,
         source_url=item.source_url,

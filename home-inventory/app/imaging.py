@@ -9,7 +9,9 @@ from PIL import Image, ImageOps
 # so this is a safety net for share-sheet and Android paths rather than the common case.
 pillow_heif.register_heif_opener()
 
-THUMB_LONG_EDGE = 512
+# 800 rather than 512: desktop grid tiles are ~300-400px, which needs ~800px to stay crisp on a
+# retina screen. A WebP at this size is still a few tens of KB.
+THUMB_LONG_EDGE = 800
 THUMB_CONTENT_TYPE = "image/webp"
 
 # A 48MP phone photo decodes to ~145MB of RGB. Pillow's default bomb guard is well above that,
