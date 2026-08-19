@@ -4,7 +4,13 @@ never be usable to reach the metadata server or anything else inside the network
 
 import pytest
 
-from app.scrape import BlockedUrl, extract_metadata, validate_url
+from app.scrape import (
+    DIGEST_MAX_CHARS,
+    BlockedUrl,
+    extract_metadata,
+    page_digest,
+    validate_url,
+)
 
 
 @pytest.mark.parametrize(
@@ -78,3 +84,41 @@ def test_an_image_url_pointing_somewhere_internal_is_dropped():
     result = extract_metadata(html, "https://example.com/")
 
     assert result.image_url is None
+
+
+def test_the_digest_carries_the_structured_product_data():
+    """The model gets JSON-LD if the page has it. That is where the exact price and brand
+    live on every retail site checked (ikea.com, nordicnest.se, kitchenlab.se)."""
+    html = """
+    <html><head>
+      <meta property="og:title" content="All Steel brodkniv">
+      <meta name="description" content="A bread knife">
+      <script type="application/ld+json">
+        {"@type":"Product","name":"All Steel","brand":{"name":"Fiskars"},
+         "offers":{"price":"599","priceCurrency":"SEK"}}
+      </script>
+      <style>.a { color: red }</style>
+    </head><body><h1>All Steel brodkniv</h1><script>var tracking = 1;</script></body></html>
+    """
+    digest = page_digest(html, "https://example.com/p/1")
+
+    assert "og:title: All Steel brodkniv" in digest
+    assert "description: A bread knife" in digest
+    assert '"priceCurrency":"SEK"' in digest
+    assert "All Steel brodkniv" in digest.split("TEXT:")[1]
+    # Script and style bodies are noise that would crowd out the page's actual words.
+    assert "var tracking" not in digest
+    assert "color: red" not in digest
+
+
+def test_the_digest_is_capped():
+    """A long page must not push the prompt into a size that costs more than the item."""
+    html = "<html><body>" + ("word " * 100_000) + "</body></html>"
+
+    assert len(page_digest(html, "https://example.com/")) <= DIGEST_MAX_CHARS
+
+
+def test_a_page_with_nothing_useful_still_produces_a_digest():
+    digest = page_digest("<html><body>Chair</body></html>", "https://example.com/")
+
+    assert "Chair" in digest

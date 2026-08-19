@@ -367,6 +367,9 @@ label > span {
 .row {
   display: flex;
   gap: var(--s-3);
+  /* Bottom-aligned so the inputs line up even when one label wraps — "Price each" plus a
+     SUGGESTED badge is taller than "Currency" beside it. */
+  align-items: end;
 }
 
 .row > * {

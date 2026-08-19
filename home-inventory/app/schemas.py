@@ -107,20 +107,23 @@ class ItemPage(BaseModel):
 
 
 class SuggestionResponse(BaseModel):
+    """A filled-in form, not a saved item. Ids rather than names, so the client can drop them
+    straight into the selects without matching on text."""
+
     name: str
-    category: str | None
-    brand: str | None
-    descriptor_notes: str | None
-
-
-class ScrapeRequest(BaseModel):
-    url: str
-
-
-class ScrapeResponse(BaseModel):
-    title: str | None
-    image_url: str | None
-    source_url: str
+    brand: str | None = None
+    descriptor_notes: str | None = None
+    category_id: str | None = None
+    room_id: str | None = None
+    purchase_price_minor: int | None = None
+    currency: str | None = None
+    purchase_date: str | None = None
+    quantity: int = 1
+    # Where the answer came from, for the client to keep alongside the item.
+    source_url: str | None = None
+    image_url: str | None = None
+    # Which of the above the model supplied, so the form can mark them as guesses.
+    suggested_fields: list[str] = Field(default_factory=list)
 
 
 class PlacementWrite(BaseModel):

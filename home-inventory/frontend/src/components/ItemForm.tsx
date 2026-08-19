@@ -43,6 +43,14 @@ export function valuesFromItem(item: ItemDetail): FormValues {
   }
 }
 
+/** Which form field backs each name the server marks as suggested. Anything not listed here
+ *  is its own name. Editing the field is what clears the badge, so the pairing has to hold. */
+export const FIELD_FOR_SUGGESTION: Record<string, keyof FormValues> = {
+  category: 'category_id',
+  room: 'room_id',
+  price: 'price',
+}
+
 /** Turn form strings into the API payload, omitting anything the owner left blank. */
 export function toPayload(values: FormValues, suggested: string[]): Record<string, unknown> {
   const payload: Record<string, unknown> = {
@@ -106,8 +114,8 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
 
       <div className="row">
         <label>
-          <span>Room</span>
-          <select value={values.room_id} onChange={set('room_id')}>
+          <span>Room{badge('room')}</span>
+          <select value={values.room_id} onChange={set('room_id')} className={mark('room')}>
             <option value="">Unassigned</option>
             {rooms.map((room) => (
               <option key={room.id} value={room.id}>
@@ -161,10 +169,14 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
 
       <div className="row">
         <label>
-          <span>Price{quantity > 1 ? ' each' : ''}</span>
+          <span>
+            Price{quantity > 1 ? ' each' : ''}
+            {badge('price')}
+          </span>
           <input
             value={values.price}
             onChange={set('price')}
+            className={mark('price')}
             inputMode="decimal"
             placeholder="0.00"
           />
@@ -194,8 +206,13 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
 
       <div className="row">
         <label>
-          <span>Purchased</span>
-          <input type="date" value={values.purchase_date} onChange={set('purchase_date')} />
+          <span>Purchased{badge('purchase_date')}</span>
+          <input
+            type="date"
+            value={values.purchase_date}
+            onChange={set('purchase_date')}
+            className={mark('purchase_date')}
+          />
         </label>
         <label>
           <span>Serial number</span>

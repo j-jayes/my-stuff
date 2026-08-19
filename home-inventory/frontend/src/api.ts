@@ -29,9 +29,17 @@ export type ItemDetail = ItemSummary & {
 
 export type Suggestion = {
   name: string
-  category: string | null
   brand: string | null
   descriptor_notes: string | null
+  category_id: string | null
+  room_id: string | null
+  purchase_price_minor: number | null
+  currency: string | null
+  purchase_date: string | null
+  quantity: number
+  source_url: string | null
+  image_url: string | null
+  suggested_fields: string[]
 }
 
 export type Placement = {
@@ -119,16 +127,15 @@ export const api = {
   },
   item: (id: string) => request<ItemDetail>(`/api/items/${id}`),
 
-  extract: (image: Blob) => {
+  /** One question — "what is this?" — asked with whatever evidence there is. Any combination
+   *  of a photo, a product link, and whatever the owner typed. */
+  suggest: (input: { image?: Blob | null; url?: string; note?: string }) => {
     const form = new FormData()
-    form.append('image', image, 'photo.jpg')
-    return request<Suggestion>('/api/items/extract', { method: 'POST', body: form })
+    if (input.image) form.append('image', input.image, 'photo.jpg')
+    if (input.url) form.append('url', input.url)
+    if (input.note) form.append('note', input.note)
+    return request<Suggestion>('/api/items/suggest', { method: 'POST', body: form })
   },
-  scrape: (url: string) =>
-    request<{ title: string | null; image_url: string | null; source_url: string }>(
-      '/api/items/scrape',
-      json({ url }),
-    ),
 
   createItem: (payload: Record<string, unknown>, image?: Blob | null, receipt?: Blob | null) => {
     const form = new FormData()

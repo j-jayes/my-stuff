@@ -12,6 +12,12 @@ from bs4 import BeautifulSoup
 # usable HTML from most of them without pretending to be a browser.
 USER_AGENT = "my-stuff-inventory/0.1 (personal home inventory; +https://github.com/)"
 MAX_HTML_BYTES = 2 * 1024 * 1024
+# Enough for the meta tags, the schema.org block and the opening body text of a product page —
+# the three real product pages this was built against digest to 6-8k. Past that a page is
+# navigation and reviews, which cost tokens and tell the model nothing.
+DIGEST_MAX_CHARS = 12_000
+JSON_LD_MAX_CHARS = 4_000
+TEXT_MAX_CHARS = 4_000
 
 
 class BlockedUrl(Exception):
@@ -22,6 +28,8 @@ class BlockedUrl(Exception):
 class PageMetadata:
     title: str | None
     image_url: str | None
+    # The page reduced to something worth putting in a prompt. See page_digest.
+    digest: str = ""
 
 
 def _check_scheme_and_literal_address(url: str) -> str:
@@ -93,6 +101,43 @@ def extract_metadata(html: str, page_url: str) -> PageMetadata:
     return PageMetadata(title=title or None, image_url=_safe_image_url(image, page_url))
 
 
+def page_digest(html: str, page_url: str) -> str:
+    """Reduce a product page to the parts worth showing a language model.
+
+    Three passes, cheapest signal first: the meta tags, then any schema.org JSON-LD (which is
+    where retail sites state the exact price, currency and brand), then the visible text with
+    the furniture stripped out. Raw HTML would be mostly markup and would blow the budget.
+
+    What comes back is untrusted third-party text. It is labelled as data in the prompt, and
+    the fields a page could try to steer — category, room — are constrained to enums built
+    from the owner's own lists, so the worst case is a bad suggestion in an editable form.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    parts: list[str] = []
+
+    for tag in soup.find_all("meta"):
+        key = tag.get("property") or tag.get("name")
+        content = tag.get("content")
+        if (
+            key
+            and content
+            and (key.startswith(("og:", "twitter:", "product:")) or key == "description")
+        ):
+            parts.append(f"{key}: {content}")
+
+    for script in soup.find_all("script", type="application/ld+json"):
+        if script.string:
+            parts.append("JSON-LD: " + " ".join(script.string.split())[:JSON_LD_MAX_CHARS])
+
+    # Decompose before get_text, or every script body and stylesheet lands in the middle of
+    # the page's actual words.
+    for tag in soup(["script", "style", "nav", "footer", "header", "svg", "noscript"]):
+        tag.decompose()
+    parts.append("TEXT: " + " ".join(soup.get_text(" ").split())[:TEXT_MAX_CHARS])
+
+    return "\n".join(parts)[:DIGEST_MAX_CHARS]
+
+
 async def fetch_page_metadata(url: str, timeout: float) -> PageMetadata:
     validate_url(url)
     async with httpx.AsyncClient(
@@ -101,7 +146,9 @@ async def fetch_page_metadata(url: str, timeout: float) -> PageMetadata:
         response = await client.get(url)
         response.raise_for_status()
         html = response.text[:MAX_HTML_BYTES]
-    return extract_metadata(html, str(response.url))
+    page = extract_metadata(html, str(response.url))
+    page.digest = page_digest(html, str(response.url))
+    return page
 
 
 async def download_image(url: str, timeout: float, max_bytes: int) -> tuple[bytes, str]:

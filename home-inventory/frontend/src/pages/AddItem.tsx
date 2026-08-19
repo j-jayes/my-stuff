@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api'
 import { CameraIcon } from '../components/Icons'
-import ItemForm, { type FormValues, emptyValues, toPayload } from '../components/ItemForm'
+import ItemForm, {
+  FIELD_FOR_SUGGESTION,
+  type FormValues,
+  emptyValues,
+  toPayload,
+} from '../components/ItemForm'
 
 type Mode = 'choose' | 'form'
 
@@ -18,9 +23,51 @@ export default function AddItem() {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<Blob | null>(null)
   const [link, setLink] = useState('')
+  const [note, setNote] = useState('')
   const [thinking, setThinking] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  /** One call for every way in. The note travels with the photo and the link alike, because
+   *  "bought from IKEA in June 2025, in the lounge" is worth more than either on its own. */
+  async function ask(input: { image?: Blob | null; url?: string }) {
+    setThinking(true)
+    setNotice(null)
+    try {
+      const suggestion = await api.suggest({ ...input, note: note.trim() || undefined })
+      if (suggestion.source_url) setSourceUrl(suggestion.source_url)
+      if (suggestion.image_url) {
+        setSourceImageUrl(suggestion.image_url)
+        if (!input.image) setPreviewUrl(suggestion.image_url)
+      }
+      setValues((current) => ({
+        ...current,
+        name: suggestion.name || current.name,
+        brand: suggestion.brand ?? current.brand,
+        descriptor_notes: suggestion.descriptor_notes ?? current.descriptor_notes,
+        category_id: suggestion.category_id ?? current.category_id,
+        room_id: suggestion.room_id ?? current.room_id,
+        purchase_date: suggestion.purchase_date ?? current.purchase_date,
+        quantity: String(suggestion.quantity),
+        price:
+          suggestion.purchase_price_minor === null
+            ? current.price
+            : String(suggestion.purchase_price_minor / 100),
+        currency: suggestion.currency ?? current.currency,
+      }))
+      setSuggested(suggestion.suggested_fields)
+      if (input.url && !suggestion.image_url) setNotice('No product image was found on that page.')
+      setMode('form')
+    } catch (error) {
+      // Failing here is a designed outcome, not an error: the form is still usable.
+      setNotice(
+        error instanceof Error ? error.message : 'Could not work that out — fill it in yourself.',
+      )
+      setMode('form')
+    } finally {
+      setThinking(false)
+    }
+  }
 
   async function onPhotoChosen(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -28,53 +75,17 @@ export default function AddItem() {
     setImage(file)
     setPreviewUrl(URL.createObjectURL(file))
     setMode('form')
-    setThinking(true)
-    setNotice(null)
-    try {
-      const suggestion = await api.extract(file)
-      const categories = await api.categories()
-      const category = categories.find((c) => c.name === suggestion.category)
-      setValues((current) => ({
-        ...current,
-        name: suggestion.name,
-        brand: suggestion.brand ?? '',
-        descriptor_notes: suggestion.descriptor_notes ?? '',
-        category_id: category?.id ?? '',
-      }))
-      setSuggested(
-        [
-          'name',
-          suggestion.brand && 'brand',
-          suggestion.descriptor_notes && 'descriptor_notes',
-          category && 'category',
-        ].filter(Boolean) as string[],
-      )
-    } catch {
-      // Suggestion failing is a designed outcome, not an error: the form is still usable.
-      setNotice('Could not read the photo automatically — fill it in yourself.')
-    } finally {
-      setThinking(false)
-    }
+    await ask({ image: file })
   }
 
   async function fetchLink(event: FormEvent) {
     event.preventDefault()
-    setThinking(true)
-    setNotice(null)
-    try {
-      const page = await api.scrape(link)
-      setSourceUrl(page.source_url)
-      setSourceImageUrl(page.image_url)
-      setPreviewUrl(page.image_url)
-      setValues((current) => ({ ...current, name: page.title ?? '' }))
-      setSuggested(page.title ? ['name'] : [])
-      if (!page.image_url) setNotice('No product image was found on that page.')
-      setMode('form')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not read that page.')
-    } finally {
-      setThinking(false)
-    }
+    await ask({ url: link })
+  }
+
+  async function fromNoteAlone(event: FormEvent) {
+    event.preventDefault()
+    await ask({})
   }
 
   async function save(event: FormEvent) {
@@ -136,6 +147,25 @@ export default function AddItem() {
           </button>
         </form>
 
+        <h2 className="section-head">Anything you already know</h2>
+        <form onSubmit={fromNoteAlone}>
+          <label>
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              placeholder="Ikea Tertial lamp, white, bought from Ikea June 2025, smart bulb fitted, in the lounge"
+              aria-label="What you know about it"
+            />
+          </label>
+          <p className="muted">
+            Sent along with the photo or the link, whichever you use — or on its own.
+          </p>
+          <button className="shrink" disabled={!note.trim() || thinking}>
+            {thinking ? <span className="spinner" /> : 'Sort it out'}
+          </button>
+        </form>
+
         {notice && <p className="error">{notice}</p>}
 
         <p className="muted" style={{ marginTop: 'var(--s-5)' }}>
@@ -143,7 +173,7 @@ export default function AddItem() {
           <button className="quiet" onClick={() => setMode('form')}>
             add it by hand
           </button>{' '}
-          with no photo.
+          with nothing filled in.
         </p>
       </>
     )
@@ -182,11 +212,10 @@ export default function AddItem() {
                 (key) => next[key] !== values[key],
               )
               setSuggested(
-                suggested.filter(
-                  (field) =>
-                    !touched.includes(field as keyof FormValues) &&
-                    !(field === 'category' && touched.includes('category_id')),
-                ),
+                suggested.filter((field) => {
+                  const backing = FIELD_FOR_SUGGESTION[field] ?? (field as keyof FormValues)
+                  return !touched.includes(backing)
+                }),
               )
               setValues(next)
             }}
