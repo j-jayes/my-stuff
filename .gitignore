@@ -15,7 +15,10 @@ dist/
 *.sqlite-shm
 *.sqlite-wal
 data/local/
-home-inventory/backend/dev.sqlite*
+home-inventory/dev.sqlite*
+home-inventory/dev-media/
+home-inventory/app/static/
+home-inventory/frontend/.playwright-mcp/
 
 # Secrets
 .env
@@ -25,3 +28,6 @@ home-inventory/backend/dev.sqlite*
 
 # OS
 .DS_Store
+
+# Playwright MCP artifacts
+.playwright-mcp/

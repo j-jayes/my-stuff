@@ -11,7 +11,7 @@ from app.db import get_session, save_snapshot
 from app.deps import get_storage, to_detail, to_summary
 from app.extract import ExtractionUnavailable, suggest_item
 from app.imaging import UnreadableImage, extension_for, make_thumbnail
-from app.models import Category, Item, Room
+from app.models import Category, Item, Room, new_id
 from app.schemas import (
     ItemDetail,
     ItemPage,
@@ -186,7 +186,9 @@ async def create_item(
     fields_sent = set(ItemWrite.model_validate_json(payload).model_dump().keys())
     _validate_refs(session, body, fields_sent)
 
-    item = Item(name=body.name)
+    # The id is assigned here rather than left to the column default, because the image keys are
+    # built from it before the row is ever flushed.
+    item = Item(id=new_id(), name=body.name)
     _apply(item, body, fields_sent)
 
     if image is not None:
@@ -238,12 +240,15 @@ async def update_item(
 
     if image is not None:
         data = await _read_upload(image, settings)
-        for old in (item.image_key, item.thumb_key):
-            if old:
-                storage.delete(old)
+        previous = (item.image_key, item.thumb_key)
+        # Write the replacement before dropping the old files: if the new image turns out to be
+        # unreadable, the item keeps the photo it already had.
         item.image_key, item.thumb_key = _store_image(
             storage, item.id, data, image.content_type or "image/jpeg"
         )
+        for old in previous:
+            if old and old not in (item.image_key, item.thumb_key):
+                storage.delete(old)
     if receipt is not None:
         data = await _read_upload(receipt, settings)
         if item.receipt_key:

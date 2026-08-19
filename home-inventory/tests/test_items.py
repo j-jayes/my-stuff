@@ -171,3 +171,26 @@ def test_suggested_fields_survive_a_reload_so_the_ui_can_still_mark_them(signed_
     reloaded = signed_in.get(f"/api/items/{item['id']}").json()
 
     assert reloaded["ai_suggested_fields"] == ["name", "brand"]
+
+
+def test_two_items_do_not_share_image_keys(signed_in, photo):
+    """The id must exist before the image key is built, or every photo overwrites the last."""
+    first = create(signed_in, name="First", photo=photo)
+    second = create(signed_in, name="Second", photo=photo)
+
+    assert "None" not in first["image_url"]
+    assert first["image_url"] != second["image_url"]
+    assert first["thumb_url"] != second["thumb_url"]
+
+
+def test_a_bad_replacement_image_leaves_the_existing_photo_intact(signed_in, photo):
+    item = create(signed_in, photo=photo)
+
+    rejected = signed_in.patch(
+        f"/api/items/{item['id']}",
+        data={"payload": json.dumps({})},
+        files={"image": ("broken.png", b"not an image at all", "image/png")},
+    )
+
+    assert rejected.status_code == 400
+    assert signed_in.get(item["thumb_url"]).status_code == 200
