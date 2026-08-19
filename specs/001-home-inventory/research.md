@@ -197,12 +197,12 @@ a change behind one function, because the database stores **object keys, never U
 
 ---
 
-## D5. Thumbnails — **Pillow at upload time, plus `pillow-heif` for iPhone photos**
+## D5. Thumbnails — **Pillow at upload time; `pillow-heif` as a safety net**
 
 ### Decision
 
-On upload, store the original untouched and generate one long-edge-512px JPEG thumbnail.
-Register `pillow-heif` so HEIC input decodes.
+On upload, store the original untouched and generate one long-edge-512px WebP thumbnail. Apply
+`ImageOps.exif_transpose` first. Register `pillow-heif` so HEIC decodes if it ever arrives.
 
 ### Rationale
 
@@ -211,10 +211,27 @@ Register `pillow-heif` so HEIC input decodes.
 - Generating one thumbnail is a few hundred milliseconds of CPU on a request the owner is
   already waiting on, and it removes any need for a background job, a queue, or a second
   service.
-- Pillow does not decode HEIC on its own; `pillow-heif` registers a plugin so `Image.open()`
-  handles it transparently. Without this, iPhone uploads would produce items with broken
-  thumbnails — a bug that only manifests on the owner's actual device, which is the worst place
-  to find it.
+
+### The HEIC situation, which is not what it first appears
+
+Vertex accepts HEIC directly (D2), but the browser mostly makes that moot:
+
+- **iOS Safari transcodes to JPEG** when the input is `accept="image/*"`, which is exactly what
+  the capture control uses. So the common path delivers JPEG, not HEIC.
+- **The trap**: adding `image/heic` to the `accept` list flips this — Safari then hands over
+  HEIC, and will even transcode a JPEG *into* HEIC. So `accept` stays exactly `image/*`, and
+  that is a deliberate choice rather than an incidental one.
+- Pillow still has no native HEIF decoding, so `pillow-heif` is registered anyway to cover the
+  share-sheet and Android paths. It ships manylinux wheels with libheif bundled, so it costs
+  nothing in the Dockerfile.
+
+### Two details that would otherwise be found the hard way
+
+- **`ImageOps.exif_transpose` is required.** Phone photos carry rotation in EXIF; without this
+  every thumbnail of a portrait photo is sideways, and only on the owner's real device.
+- **Memory.** A 48 MP photo decodes to roughly 145 MB of RGB. The Cloud Run service is
+  therefore sized at 1 GiB rather than the default 512 MiB, and the database shares that
+  budget because the filesystem is tmpfs.
 
 ---
 
