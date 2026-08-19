@@ -569,6 +569,9 @@ label > span {
   text-align: center;
   background: var(--surface);
   align-items: center;
+  /* Bounded so it does not stretch into a vast empty panel on a wide screen. */
+  max-width: 560px;
+  margin-inline: auto;
 }
 
 .capture .button {

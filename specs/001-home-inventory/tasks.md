@@ -54,6 +54,17 @@ Status as of 2026-08-19. Phases 1–7 are done, deployed, and verified against t
 - [x] **Cold-start test passed**: a new revision restored the database from GCS intact
 - [x] Confirmed `minScale=0`, `maxScale=1`, request-based billing
 
+## Phase 8 — Visual redesign and desktop layout ✅
+
+- [x] Design tokens in `frontend/src/styles/tokens.css`: blog colours and type, Drake's spatial
+      language (cream ground, squared corners, hairline rules)
+- [x] Five self-hosted woff2 faces, 104 KB — Noto Serif JP 300, Lato 400/700, IBM Plex Mono
+- [x] Two-blue palette forced by contrast: `#2b8cbe` for headings, `#1a6d94` for interactive
+- [x] `scripts/check_contrast.py` asserting 24 pairs across light and dark palettes
+- [x] Desktop sidebar with room and category filters; filters moved into the URL
+- [x] Drake's-style product grid, two-column item page, board canvas with a side rail
+- [x] Verified at 390 / 834 / 1440 px, light and dark, no horizontal scroll, one nav per viewport
+
 ## Remaining
 
 - [ ] Exercise the capture flow on Jonathan's actual iPhone — the one thing that cannot be
