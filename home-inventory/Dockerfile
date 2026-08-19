@@ -21,6 +21,10 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app/ ./app/
+# Alembic runs at boot to bring the restored database up to head, so the config and the
+# revision scripts have to be in the image alongside the app.
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
 # vite's outDir is ../app/static, which resolves to /app/static in the frontend stage. This
 # must land after the app copy, or the app copy would overwrite it.
 COPY --from=frontend /app/static ./app/static

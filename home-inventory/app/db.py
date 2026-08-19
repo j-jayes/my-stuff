@@ -4,13 +4,22 @@ import threading
 from collections.abc import Iterator
 from pathlib import Path
 
-from sqlalchemy import create_engine, event, select
+from alembic import command
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from sqlalchemy import create_engine, event, inspect, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
-from app.models import SEED_CATEGORIES, SEED_ROOMS, Base, Category, Room
+from app.models import SEED_CATEGORIES, SEED_ROOMS, Category, Room
 from app.snapshot import DatabaseSnapshot, GcsObjectStore
+
+ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
+# The revision that describes the schema as it was when Alembic was adopted. A database from
+# before then already looks like this, so it is stamped here rather than migrated to here.
+BASELINE_REVISION = "0001_baseline"
 
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
@@ -18,6 +27,37 @@ _snapshot: DatabaseSnapshot | None = None
 # max-instances=1 means one process, but uvicorn still serves requests concurrently. Serialise
 # the snapshot upload so two saves cannot interleave and race the generation number.
 _snapshot_lock = threading.Lock()
+
+
+def _alembic_config() -> Config:
+    config = Config(str(ALEMBIC_INI))
+    # script_location in the ini is resolved against the working directory, not against the
+    # ini. Pin it, or the app only boots when it happens to be started from this directory.
+    config.set_main_option("script_location", str(ALEMBIC_INI.parent / "migrations"))
+    return config
+
+
+def head_revision() -> str:
+    return ScriptDirectory.from_config(_alembic_config()).get_current_head()
+
+
+def _upgrade_schema(engine: Engine) -> bool:
+    """Bring the schema to head, and return whether that changed anything.
+
+    Alembic owns the schema, including on a brand new file — create_all is not called
+    anywhere any more. The awkward case is the database already in storage: it was built by
+    create_all and has every table but no alembic_version, so running the baseline against it
+    would fail on "table already exists". Stamp it instead.
+    """
+    config = _alembic_config()
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        tables = set(inspect(connection).get_table_names())
+        if "items" in tables and "alembic_version" not in tables:
+            command.stamp(config, BASELINE_REVISION)
+        before = MigrationContext.configure(connection).get_current_revision()
+        command.upgrade(config, "head")
+        return before != head_revision()
 
 
 @event.listens_for(Engine, "connect")
@@ -45,15 +85,17 @@ def init(settings: Settings) -> None:
     _engine = create_engine(
         f"sqlite:///{path}", connect_args={"check_same_thread": False}, future=True
     )
-    Base.metadata.create_all(_engine)
+    migrated = _upgrade_schema(_engine)
     _session_factory = sessionmaker(_engine, expire_on_commit=False)
 
     with _session_factory() as session:
         _seed(session)
         session.commit()
 
-    # A brand new database is not in storage yet; put it there so a restart finds it.
-    if _snapshot.enabled and _snapshot.generation is None:
+    # A brand new database is not in storage yet; put it there so a restart finds it. A
+    # migrated one must go back too, or the copy in storage keeps its old shape and every
+    # cold start migrates a file that is never written back.
+    if _snapshot.enabled and (_snapshot.generation is None or migrated):
         save_snapshot()
 
 
