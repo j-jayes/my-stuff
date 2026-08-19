@@ -1,0 +1,29 @@
+# Runs the production image locally, so "works on my machine" and "works on Cloud Run" are the
+# same claim. Use this before every deploy; use `uv run uvicorn --reload` for the fast loop.
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD:-letmein}
+      SESSION_SECRET: ${SESSION_SECRET:-local-development-secret}
+      # Swap to gcs to exercise the real buckets against the mounted credentials below.
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      LOCAL_MEDIA_DIR: /srv/data/media
+      DB_PATH: /srv/data/inventory.sqlite
+      # Empty means the database is never snapshotted to the cloud from a local run.
+      DB_BUCKET: ${DB_BUCKET:-}
+      MEDIA_BUCKET: ${MEDIA_BUCKET:-my-stuff-inventory-media}
+      GCP_PROJECT: ${GCP_PROJECT:-my-stuff-inventory}
+      GEMINI_LOCATION: global
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      GOOGLE_APPLICATION_CREDENTIALS: /gcp/application_default_credentials.json
+    volumes:
+      # Survives a container rebuild, so local data is not lost every time the image changes.
+      - inventory-data:/srv/data
+      # Read-only ADC, so the Gemini calls work locally without a service account key.
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/gcp/application_default_credentials.json:ro
+
+volumes:
+  inventory-data:
