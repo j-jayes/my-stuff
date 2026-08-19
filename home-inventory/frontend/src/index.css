@@ -391,6 +391,49 @@ label > span {
   max-width: 116px;
 }
 
+.side-foot {
+  margin-top: auto;
+  padding-top: var(--s-4);
+}
+
+.taxonomy-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--s-3) 0;
+}
+
+.taxonomy-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: var(--rule) solid var(--border);
+}
+
+.taxonomy-list li.nested span:first-child {
+  padding-left: var(--s-5);
+  color: var(--muted);
+}
+
+.taxonomy-list .row.shrink {
+  flex: 0 0 auto;
+}
+
+/* A warning that is not a failure: softer than .error, and it never blocks the save. */
+.notice {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent-strong);
+  padding: var(--s-3) var(--s-4);
+  margin-top: var(--s-4);
+  border-radius: var(--radius);
+}
+
+.notice ul {
+  margin: var(--s-2) 0;
+  padding-left: var(--s-4);
+}
+
 .error {
   background: var(--danger-soft);
   border-left: 3px solid var(--danger);

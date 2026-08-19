@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 
-import { type ItemDetail, type TaxonomyEntry, api, formatPrice } from '../api'
+import { type BrandEntry, type ItemDetail, type TaxonomyEntry, api, formatPrice } from '../api'
 
 export type FormValues = {
   name: string
@@ -88,10 +88,14 @@ type Props = {
 export default function ItemForm({ values, onChange, suggested, onSubmit, submitLabel, busy }: Props) {
   const [rooms, setRooms] = useState<TaxonomyEntry[]>([])
   const [categories, setCategories] = useState<TaxonomyEntry[]>([])
+  const [brands, setBrands] = useState<BrandEntry[]>([])
 
   useEffect(() => {
     api.rooms().then(setRooms).catch(() => setRooms([]))
     api.categories().then(setCategories).catch(() => setCategories([]))
+    // Offering the brands already in use is what stops "IKEA" and "Ikea" both existing. The
+    // server normalises anyway; this is so the owner sees it coming.
+    api.brands().then(setBrands).catch(() => setBrands([]))
   }, [])
 
   const set = (field: keyof FormValues) => (event: { target: { value: string } }) =>
@@ -155,7 +159,17 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
 
       <label>
         <span>Brand{badge('brand')}</span>
-        <input value={values.brand} onChange={set('brand')} className={mark('brand')} />
+        <input
+          value={values.brand}
+          onChange={set('brand')}
+          className={mark('brand')}
+          list="known-brands"
+        />
+        <datalist id="known-brands">
+          {brands.map((brand) => (
+            <option key={brand.name} value={brand.name} />
+          ))}
+        </datalist>
       </label>
 
       <label>

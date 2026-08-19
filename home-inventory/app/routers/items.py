@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+import unicodedata
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -14,7 +16,14 @@ from app.deps import get_storage, to_detail, to_summary
 from app.extract import ExtractionUnavailable, _to_minor, suggest_item
 from app.imaging import UnreadableImage, extension_for, make_thumbnail
 from app.models import Category, Item, Room, new_id
-from app.schemas import ItemDetail, ItemPage, ItemWrite, SuggestionResponse
+from app.schemas import (
+    BrandEntry,
+    ItemDetail,
+    ItemPage,
+    ItemSummary,
+    ItemWrite,
+    SuggestionResponse,
+)
 from app.scrape import BlockedUrl, PageMetadata, download_image, fetch_page_metadata
 from app.storage import MediaStorage
 
@@ -72,7 +81,29 @@ def _store_image(
     return image_key, thumb_key
 
 
-def _apply(item: Item, body: ItemWrite, fields_sent: set[str]) -> None:
+def _normalised_brand(session: Session, brand: str | None) -> str | None:
+    """Reuse the spelling already in use for this brand, ignoring case.
+
+    The database holds both "IKEA" and "Ikea" as separate brands. One is a typo and there is
+    no telling which, so whichever arrived first wins from then on and the two stop drifting.
+    """
+    cleaned = (brand or "").strip()
+    if not cleaned:
+        return None
+    # Whichever spelling most items already use, so the answer does not depend on scan order.
+    existing = session.scalar(
+        select(Item.brand)
+        .where(func.lower(Item.brand) == cleaned.lower())
+        .group_by(Item.brand)
+        .order_by(func.count(Item.id).desc(), Item.brand)
+        .limit(1)
+    )
+    return existing or cleaned
+
+
+def _apply(item: Item, body: ItemWrite, fields_sent: set[str], session: Session) -> None:
+    if "brand" in fields_sent:
+        body = body.model_copy(update={"brand": _normalised_brand(session, body.brand)})
     for field in (
         "name",
         "brand",
@@ -250,6 +281,67 @@ async def suggest(
     )
 
 
+# Words too common in a home inventory to mean two things are the same item.
+COMMON_WORDS = frozenset(
+    {"the", "and", "with", "for", "chair", "table", "lamp", "shelf", "unit", "set", "cm", "mm"}
+)
+
+
+def _fold(text: str) -> str:
+    """Casefold and strip accents, so POANG and POÄNG are the same word.
+
+    The model writes what it can type; the inventory holds what the shop printed. Without
+    this, the duplicate that prompted the whole feature — POÄNG entered twice — is invisible.
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+
+
+def _distinctive_words(name: str) -> set[str]:
+    words = re.findall(r"[\w]+", _fold(name))
+    return {w for w in words if len(w) > 2 and w not in COMMON_WORDS}
+
+
+@router.get("/similar", response_model=list[ItemSummary])
+def list_similar(name: str, session: Session = Depends(get_session)) -> list[ItemSummary]:
+    """Items that look like the one being added. A warning for the client to show, never a
+    block — two identical chairs is a real thing to own.
+
+    Done here rather than by reusing the search endpoint because SQL LIKE cannot fold an
+    accent, and matching on the whole suggested name finds nothing: "Poang armchair" shares
+    no substring with "POÄNG".
+    """
+    wanted = _distinctive_words(name)
+    if not wanted:
+        return []
+
+    # Small inventories, and the comparison needs accent folding that SQLite will not do.
+    # If this ever needs an index it needs a different design, not a cleverer query.
+    # Brand is deliberately not part of this: owning two IKEA things is normal, so a shared
+    # brand with no shared word is not a duplicate.
+    matches = [
+        item
+        for item in session.scalars(
+            select(Item).options(joinedload(Item.room), joinedload(Item.category))
+        )
+        if wanted & _distinctive_words(item.name)
+    ]
+    return [to_summary(item) for item in matches[:5]]
+
+
+@router.get("/brands", response_model=list[BrandEntry])
+def list_brands(session: Session = Depends(get_session)) -> list[BrandEntry]:
+    """Feeds the brand field's autocomplete. Registered above /{item_id}, or the path
+    parameter would match "brands" and try to look it up as an id."""
+    rows = session.execute(
+        select(Item.brand, func.count(Item.id))
+        .where(Item.brand.isnot(None), Item.brand != "")
+        .group_by(Item.brand)
+        .order_by(func.count(Item.id).desc(), Item.brand)
+    ).all()
+    return [BrandEntry(name=name, item_count=count) for name, count in rows]
+
+
 @router.get("/{item_id}", response_model=ItemDetail)
 def get_item(item_id: str, session: Session = Depends(get_session)) -> ItemDetail:
     item = session.get(Item, item_id)
@@ -276,7 +368,7 @@ async def create_item(
     # The id is assigned here rather than left to the column default, because the image keys are
     # built from it before the row is ever flushed.
     item = Item(id=new_id(), name=body.name)
-    _apply(item, body, fields_sent)
+    _apply(item, body, fields_sent, session)
 
     if image is not None:
         data = await _read_upload(image, settings)
@@ -323,7 +415,7 @@ async def update_item(
     if "name" in fields_sent and not body.name:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "An item needs a name")
     _validate_refs(session, body, fields_sent)
-    _apply(item, body, fields_sent)
+    _apply(item, body, fields_sent, session)
 
     if image is not None:
         data = await _read_upload(image, settings)

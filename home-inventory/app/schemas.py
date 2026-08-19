@@ -101,6 +101,11 @@ class ItemDetail(ItemSummary):
     updated_at: str
 
 
+class BrandEntry(BaseModel):
+    name: str
+    item_count: int
+
+
 class ItemPage(BaseModel):
     items: list[ItemSummary]
     total: int

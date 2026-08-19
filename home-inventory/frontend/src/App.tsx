@@ -9,6 +9,7 @@ import BoardCanvas from './pages/BoardCanvas'
 import Boards from './pages/Boards'
 import Gallery from './pages/Gallery'
 import Inventory from './pages/Inventory'
+import Settings from './pages/Settings'
 import ItemDetail from './pages/ItemDetail'
 import Login from './pages/Login'
 
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/boards" element={<Boards />} />
           <Route path="/boards/:id" element={<BoardCanvas />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

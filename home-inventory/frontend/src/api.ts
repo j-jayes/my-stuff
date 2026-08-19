@@ -27,6 +27,8 @@ export type ItemDetail = ItemSummary & {
   updated_at: string
 }
 
+export type BrandEntry = { name: string; item_count: number }
+
 export type Suggestion = {
   name: string
   brand: string | null
@@ -115,8 +117,26 @@ export const api = {
   categories: () => (categoriesCache ??= request<TaxonomyEntry[]>('/api/categories')),
   addRoom: (name: string) =>
     request<TaxonomyEntry>('/api/rooms', json({ name })).finally(invalidateTaxonomy),
-  addCategory: (name: string) =>
-    request<TaxonomyEntry>('/api/categories', json({ name })).finally(invalidateTaxonomy),
+  addCategory: (name: string, parent_id?: string | null) =>
+    request<TaxonomyEntry>('/api/categories', json({ name, parent_id: parent_id ?? null })).finally(
+      invalidateTaxonomy,
+    ),
+  renameRoom: (id: string, name: string) =>
+    request<TaxonomyEntry>(`/api/rooms/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).finally(invalidateTaxonomy),
+  renameCategory: (id: string, name: string) =>
+    request<TaxonomyEntry>(`/api/categories/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).finally(invalidateTaxonomy),
+  deleteRoom: (id: string) =>
+    request<void>(`/api/rooms/${id}`, { method: 'DELETE' }).finally(invalidateTaxonomy),
+  deleteCategory: (id: string) =>
+    request<void>(`/api/categories/${id}`, { method: 'DELETE' }).finally(invalidateTaxonomy),
 
   items: (params: { q?: string; room_id?: string; category_id?: string; limit?: number }) => {
     const query = new URLSearchParams()
@@ -126,6 +146,9 @@ export const api = {
     return request<{ items: ItemSummary[]; total: number }>(`/api/items?${query}`)
   },
   item: (id: string) => request<ItemDetail>(`/api/items/${id}`),
+  brands: () => request<BrandEntry[]>('/api/items/brands'),
+  similar: (name: string) =>
+    request<ItemSummary[]>(`/api/items/similar?name=${encodeURIComponent(name)}`),
 
   /** One question — "what is this?" — asked with whatever evidence there is. Any combination
    *  of a photo, a product link, and whatever the owner typed. */

@@ -1,7 +1,7 @@
 import { type ChangeEvent, type FormEvent, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
-import { api } from '../api'
+import { type ItemSummary, api } from '../api'
 import { CameraIcon } from '../components/Icons'
 import ItemForm, {
   FIELD_FOR_SUGGESTION,
@@ -24,6 +24,7 @@ export default function AddItem() {
   const [receipt, setReceipt] = useState<Blob | null>(null)
   const [link, setLink] = useState('')
   const [note, setNote] = useState('')
+  const [duplicates, setDuplicates] = useState<ItemSummary[]>([])
   const [thinking, setThinking] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -58,6 +59,7 @@ export default function AddItem() {
       setSuggested(suggestion.suggested_fields)
       if (input.url && !suggestion.image_url) setNotice('No product image was found on that page.')
       setMode('form')
+      void checkForDuplicates(suggestion.name)
     } catch (error) {
       // Failing here is a designed outcome, not an error: the form is still usable.
       setNotice(
@@ -66,6 +68,19 @@ export default function AddItem() {
       setMode('form')
     } finally {
       setThinking(false)
+    }
+  }
+
+  /** IKEA POÄNG is in the inventory twice — once photographed, once from a link — as "POÄNG"
+   *  and "Ikea POÄNG". Reuses the search the inventory page already does, so there is nothing
+   *  to add on the server. A warning, never a block: two identical chairs is a real thing. */
+  async function checkForDuplicates(name: string) {
+    if (!name.trim()) return
+    try {
+      setDuplicates(await api.similar(name))
+    } catch {
+      // Not finding out is not worth surfacing; the save is unaffected either way.
+      setDuplicates([])
     }
   }
 
@@ -203,6 +218,25 @@ export default function AddItem() {
             </p>
           )}
           {notice && <p className="error">{notice}</p>}
+
+          {duplicates.length > 0 && (
+            <div className="notice">
+              <p>You may already have this:</p>
+              <ul>
+                {duplicates.map((existing) => (
+                  <li key={existing.id}>
+                    <Link to={`/items/${existing.id}`}>
+                      {existing.name}
+                      {existing.brand ? ` · ${existing.brand}` : ''}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <button className="quiet" onClick={() => setDuplicates([])}>
+                Add it anyway
+              </button>
+            </div>
+          )}
 
           <ItemForm
             values={values}

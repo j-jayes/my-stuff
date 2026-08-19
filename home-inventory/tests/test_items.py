@@ -249,3 +249,62 @@ def test_a_patch_that_says_nothing_about_quantity_leaves_it_alone(signed_in):
     )
 
     assert updated.json()["quantity"] == 6
+
+
+def test_the_brands_already_in_use_can_be_listed(signed_in):
+    create(signed_in, name="Chair", brand="Ercol")
+    create(signed_in, name="Stool", brand="Ercol")
+    create(signed_in, name="Lamp", brand="IKEA")
+    create(signed_in, name="Rug")
+
+    brands = signed_in.get("/api/items/brands").json()
+
+    # Commonest first, so the field suggests what is actually being typed.
+    assert brands == [{"name": "Ercol", "item_count": 2}, {"name": "IKEA", "item_count": 1}]
+
+
+def test_a_brand_that_only_differs_in_case_reuses_the_spelling_already_there(signed_in):
+    """The database holds both "IKEA" and "Ikea" as separate brands. One of them is a typo
+    and there is no way to tell which, so whichever arrived first wins from now on."""
+    create(signed_in, name="Shelf", brand="IKEA")
+
+    item = create(signed_in, name="Chair", brand="  ikea ")
+
+    assert item["brand"] == "IKEA"
+    assert signed_in.get("/api/items/brands").json() == [{"name": "IKEA", "item_count": 2}]
+
+
+def test_the_spelling_most_items_already_use_is_the_one_that_wins(signed_in, settings):
+    """Mixed spellings can only be legacy data — normalisation converges everything written
+    after it — and the live database has exactly this: "Ikea" twice and "IKEA" once. Picking
+    whichever row the database returned first would make the answer depend on scan order, so
+    the rows are written straight in here to reproduce the state that actually exists.
+    """
+    import sqlite3
+
+    for name in ("Shelf", "Chair", "Table"):
+        create(signed_in, name=name, brand="IKEA")
+    legacy = sqlite3.connect(settings.db_path)
+    legacy.execute("UPDATE items SET brand = 'Ikea' WHERE name IN ('Chair', 'Table')")
+    legacy.commit()
+    legacy.close()
+
+    item = create(signed_in, name="Lamp", brand="ikea")
+
+    assert item["brand"] == "Ikea"
+
+
+def test_a_genuinely_new_brand_is_kept_as_typed(signed_in):
+    item = create(signed_in, name="Pan", brand="Skeppshult")
+
+    assert item["brand"] == "Skeppshult"
+
+
+def test_renaming_a_brand_on_one_item_does_not_touch_the_others(signed_in):
+    """Normalisation is about how a brand is stored, not a shared record to be edited."""
+    first = create(signed_in, name="Shelf", brand="IKEA")
+    create(signed_in, name="Chair", brand="IKEA")
+
+    signed_in.patch(f"/api/items/{first['id']}", data={"payload": json.dumps({"brand": "Habitat"})})
+
+    assert {b["name"] for b in signed_in.get("/api/items/brands").json()} == {"IKEA", "Habitat"}
