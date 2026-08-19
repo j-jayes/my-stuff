@@ -499,6 +499,16 @@ label > span {
   color: var(--text);
 }
 
+/* A shelf inside a category: indented, and quieter than the parents it sits under. */
+.filter-list a.nested {
+  padding-left: var(--s-5);
+  font-size: var(--step--1);
+}
+
+.chips-nested {
+  padding-left: var(--s-4);
+}
+
 /* A count rides along with the name rather than taking a line of its own — most items are
    one of a thing, so this is a rare annotation and must not cost every tile a row. */
 .tile-count {

@@ -1,6 +1,7 @@
 export type NamedRef = { id: string; name: string }
 
-export type TaxonomyEntry = NamedRef & { item_count: number }
+/** parent_id is always null for rooms; for a category it names the category it sits under. */
+export type TaxonomyEntry = NamedRef & { item_count: number; parent_id: string | null }
 
 export type ItemSummary = {
   id: string

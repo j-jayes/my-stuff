@@ -13,7 +13,13 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
-from app.models import SEED_CATEGORIES, SEED_ROOMS, Category, Room
+from app.models import (
+    SEED_CATEGORIES,
+    SEED_KITCHENWARE_SUBCATEGORIES,
+    SEED_ROOMS,
+    Category,
+    Room,
+)
 from app.snapshot import DatabaseSnapshot, GcsObjectStore
 
 ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
@@ -50,13 +56,30 @@ def _upgrade_schema(engine: Engine) -> bool:
     would fail on "table already exists". Stamp it instead.
     """
     config = _alembic_config()
-    with engine.begin() as connection:
+    with engine.connect() as connection:
+        # SQLite cannot alter a table in place, so Alembic rebuilds it: rename, recreate,
+        # copy, drop. With foreign keys enforced — which _enable_sqlite_foreign_keys does on
+        # every connection — that drop breaks every row pointing at the table being rebuilt.
+        # It only bites a database that already holds data, so an empty test database would
+        # never show it. Enforcement goes back on below, and the result is checked.
+        # Driven through the raw DBAPI connection on purpose: SQLite treats this pragma as a
+        # no-op inside a transaction, and going through SQLAlchemy would autobegin one.
+        raw = connection.connection.dbapi_connection
+        raw.execute("PRAGMA foreign_keys=OFF")
+        assert raw.execute("PRAGMA foreign_keys").fetchone()[0] == 0, "pragma did not take"
+
         config.attributes["connection"] = connection
-        tables = set(inspect(connection).get_table_names())
-        if "items" in tables and "alembic_version" not in tables:
-            command.stamp(config, BASELINE_REVISION)
-        before = MigrationContext.configure(connection).get_current_revision()
-        command.upgrade(config, "head")
+        with connection.begin():
+            tables = set(inspect(connection).get_table_names())
+            if "items" in tables and "alembic_version" not in tables:
+                command.stamp(config, BASELINE_REVISION)
+            before = MigrationContext.configure(connection).get_current_revision()
+            command.upgrade(config, "head")
+
+        raw.execute("PRAGMA foreign_keys=ON")
+        dangling = raw.execute("PRAGMA foreign_key_check").fetchall()
+        if dangling:
+            raise RuntimeError(f"Migration left dangling references: {dangling[:5]}")
         return before != head_revision()
 
 
@@ -104,6 +127,26 @@ def _seed(session: Session) -> None:
         session.add_all(Room(name=n, sort_order=i) for i, n in enumerate(SEED_ROOMS))
     if session.scalar(select(Category).limit(1)) is None:
         session.add_all(Category(name=n, sort_order=i) for i, n in enumerate(SEED_CATEGORIES))
+        session.flush()
+    _seed_kitchenware_subcategories(session)
+
+
+def _seed_kitchenware_subcategories(session: Session) -> None:
+    """Top up by name rather than seeding, because the categories table is not empty on any
+    database that already existed — the guard above would skip it forever.
+
+    Anything the owner has since renamed or deleted stays deleted: only names that are
+    missing are added, and only while Kitchenware itself is still there.
+    """
+    kitchenware = session.scalar(select(Category).where(Category.name == "Kitchenware"))
+    if kitchenware is None:
+        return
+    existing = set(session.scalars(select(Category.name)))
+    session.add_all(
+        Category(name=name, parent_id=kitchenware.id, sort_order=i)
+        for i, name in enumerate(SEED_KITCHENWARE_SUBCATEGORIES)
+        if name not in existing
+    )
 
 
 def get_session() -> Iterator[Session]:

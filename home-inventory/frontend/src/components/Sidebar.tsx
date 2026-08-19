@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useSearchParams } from 'react-router-dom'
 
 import { type TaxonomyEntry, api } from '../api'
@@ -38,30 +38,46 @@ export default function Sidebar() {
     entries: TaxonomyEntry[],
     key: 'room' | 'category',
     active: string,
-  ) => (
-    <div className="side-group">
-      <span className="eyebrow">{title}</span>
-      <div className="filter-list">
-        {/* Plain links, not NavLink: every one of these points at the same pathname and differs
-            only in the query, so NavLink would mark all of them active and announce each room as
-            the current page. */}
-        {entries.map((entry) => {
-          const on = active === entry.id
-          return (
-            <Link
-              key={entry.id}
-              to={filterHref(key, entry.id, on)}
-              className={on ? 'on' : undefined}
-              aria-current={on ? 'true' : undefined}
-            >
-              <span>{entry.name}</span>
-              {entry.item_count > 0 && <span className="count numeric">{entry.item_count}</span>}
-            </Link>
-          )
-        })}
+  ) => {
+    const top = entries.filter((entry) => !entry.parent_id)
+    const childrenOf = (id: string) => entries.filter((entry) => entry.parent_id === id)
+    // Kitchenware alone has twelve shelves. Listing them all the time would bury the other
+    // eight categories, so a parent's children appear only once that branch is selected.
+    const activeEntry = entries.find((entry) => entry.id === active)
+    const open = activeEntry?.parent_id ?? (childrenOf(active).length ? active : null)
+
+    const link = (entry: TaxonomyEntry, nested: boolean) => {
+      const on = active === entry.id
+      return (
+        <Link
+          key={entry.id}
+          to={filterHref(key, entry.id, on)}
+          className={[on ? 'on' : '', nested ? 'nested' : ''].filter(Boolean).join(' ') || undefined}
+          aria-current={on ? 'true' : undefined}
+        >
+          <span>{entry.name}</span>
+          {entry.item_count > 0 && <span className="count numeric">{entry.item_count}</span>}
+        </Link>
+      )
+    }
+
+    return (
+      <div className="side-group">
+        <span className="eyebrow">{title}</span>
+        <div className="filter-list">
+          {/* Plain links, not NavLink: every one of these points at the same pathname and differs
+              only in the query, so NavLink would mark all of them active and announce each room as
+              the current page. */}
+          {top.map((entry) => (
+            <Fragment key={entry.id}>
+              {link(entry, false)}
+              {open === entry.id && childrenOf(entry.id).map((child) => link(child, true))}
+            </Fragment>
+          ))}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <aside className="sidebar">

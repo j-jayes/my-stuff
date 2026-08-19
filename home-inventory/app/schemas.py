@@ -16,10 +16,13 @@ class NamedRef(BaseModel):
 
 class TaxonomyEntry(NamedRef):
     item_count: int = 0
+    # Always null for rooms, which are a single level. For a category it names its parent.
+    parent_id: str | None = None
 
 
 class TaxonomyWrite(BaseModel):
     name: str
+    parent_id: str | None = None
 
     @field_validator("name")
     @classmethod

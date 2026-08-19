@@ -60,6 +60,11 @@ export default function Inventory() {
   }
 
   const filtered = Boolean(roomId || categoryId || query)
+  // Which branch of the category tree to expose a second chip row for: the selected category
+  // if it has shelves, otherwise the parent of the selected shelf.
+  const selected = categories.find((c) => c.id === categoryId)
+  const openParent = selected?.parent_id ?? (selected && !selected.parent_id ? selected.id : null)
+  const shelves = categories.filter((c) => c.parent_id && c.parent_id === openParent)
 
   // Name the view after whatever is filtering it, so the heading confirms what the sidebar or
   // chips just did rather than repeating the brand.
@@ -98,16 +103,31 @@ export default function Inventory() {
         ))}
       </div>
       <div className="chips">
-        {categories.map((category) => (
-          <button
-            key={category.id}
-            className={`chip ${categoryId === category.id ? 'on' : ''}`}
-            onClick={() => toggleFilter('category', category.id)}
-          >
-            {category.name}
-          </button>
-        ))}
+        {categories
+          .filter((category) => !category.parent_id)
+          .map((category) => (
+            <button
+              key={category.id}
+              className={`chip ${categoryId === category.id || openParent === category.id ? 'on' : ''}`}
+              onClick={() => toggleFilter('category', category.id)}
+            >
+              {category.name}
+            </button>
+          ))}
       </div>
+      {shelves.length > 0 && (
+        <div className="chips chips-nested">
+          {shelves.map((shelf) => (
+            <button
+              key={shelf.id}
+              className={`chip ${categoryId === shelf.id ? 'on' : ''}`}
+              onClick={() => toggleFilter('category', shelf.id)}
+            >
+              {shelf.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading && (
         <div className="centred">

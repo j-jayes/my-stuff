@@ -43,9 +43,20 @@ class Category(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Null for a top-level category. Exactly one level of nesting is allowed; the router is
+    # what enforces that, since a self-referencing column cannot express a depth limit.
+    parent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="RESTRICT"), name="parent_id"
+    )
     created_at: Mapped[str] = mapped_column(String, nullable=False, default=utcnow)
 
     items: Mapped[list["Item"]] = relationship(back_populates="category")
+    children: Mapped[list["Category"]] = relationship(
+        back_populates="parent", order_by="Category.sort_order"
+    )
+    parent: Mapped["Category | None"] = relationship(
+        back_populates="children", remote_side="Category.id"
+    )
 
 
 class Item(Base):
@@ -140,4 +151,22 @@ SEED_CATEGORIES = [
     "Decor",
     "Clothing & Accessories",
     "Miscellaneous",
+]
+# Kitchenware alone was doing the work of a dozen shelves — a cooking spoon, a bread knife
+# and a 5.5 L casserole all landed in it. The names follow the Google product taxonomy's
+# Kitchen & Dining branch, in British usage: "Cutlery" is what goes on the table, and
+# "crockery" and "plates and bowls" are one shelf under its trade name, Dinnerware.
+SEED_KITCHENWARE_SUBCATEGORIES = [
+    "Cookware",
+    "Bakeware",
+    "Kitchen Knives",
+    "Cutting Boards",
+    "Kitchen Tools & Utensils",
+    "Dinnerware",
+    "Serveware & Trays",
+    "Drinkware & Glassware",
+    "Cutlery",
+    "Barware",
+    "Food Storage",
+    "Kitchen Textiles",
 ]

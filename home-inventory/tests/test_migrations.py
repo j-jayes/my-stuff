@@ -84,15 +84,65 @@ def test_a_pre_alembic_database_is_adopted_rather_than_rebuilt(settings):
     assert version == db.head_revision()
 
 
+def _category_names(path: str) -> list[str]:
+    engine = sa.create_engine(f"sqlite:///{path}")
+    try:
+        with engine.connect() as connection:
+            return sorted(connection.scalars(sa.text("SELECT name FROM categories")))
+    finally:
+        engine.dispose()
+
+
 def test_initialising_twice_is_a_no_op(settings):
+    """The subcategories are topped up by name on every boot rather than seeded once, so a
+    restart is the case most likely to duplicate them."""
     db.reset_for_tests()
     db.init(settings)
+    db.reset_for_tests()
+    after_first = _category_names(settings.db_path)
+
+    db.init(settings)
+    db.reset_for_tests()
+
+    assert _category_names(settings.db_path) == after_first
+    assert len(after_first) == len(set(after_first))
+
+
+def test_a_database_with_items_in_it_still_migrates(settings):
+    """SQLite rebuilds a table to alter it, and a rebuild of categories breaks every item
+    pointing at one while foreign keys are enforced. An empty database never hits this, so
+    this test has to put a real row in the way first.
+    """
+    config = db._alembic_config()
+    engine = sa.create_engine(f"sqlite:///{settings.db_path}")
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, db.BASELINE_REVISION)
+        connection.execute(
+            sa.text(
+                "INSERT INTO categories (id, name, sort_order, created_at)"
+                " VALUES ('cat-1', 'Kitchenware', 0, '2026-01-01T00:00:00Z')"
+            )
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO items (id, name, category_id, created_at, updated_at)"
+                " VALUES ('itm-1', 'Bread knife', 'cat-1',"
+                " '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+            )
+        )
+    engine.dispose()
+
     db.reset_for_tests()
     db.init(settings)
     db.reset_for_tests()
 
     engine = sa.create_engine(f"sqlite:///{settings.db_path}")
     with engine.connect() as connection:
-        # Seeding is guarded on emptiness, so a second init must not double the categories.
-        assert connection.execute(sa.text("SELECT count(*) FROM categories")).scalar() == 9
+        # The item still points at the category it pointed at, and nothing dangles.
+        assert (
+            connection.execute(sa.text("SELECT category_id FROM items WHERE id='itm-1'")).scalar()
+            == "cat-1"
+        )
+        assert connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall() == []
     engine.dispose()

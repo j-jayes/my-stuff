@@ -45,12 +45,16 @@ async def _read_upload(upload: UploadFile, settings: Settings) -> bytes:
     return data
 
 
-def _store_image(storage: MediaStorage, item_id: str, data: bytes, content_type: str) -> tuple[str, str]:
+def _store_image(
+    storage: MediaStorage, item_id: str, data: bytes, content_type: str
+) -> tuple[str, str]:
     """Save the original and a thumbnail; return their keys."""
     try:
         thumb = make_thumbnail(data)
     except UnreadableImage as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"That file is not a readable image: {exc}")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"That file is not a readable image: {exc}"
+        )
 
     image_key = f"items/{item_id}/original.{extension_for(content_type)}"
     thumb_key = f"items/{item_id}/thumb.webp"
@@ -105,7 +109,12 @@ def list_items(
     if room_id:
         filters.append(Item.room_id == room_id)
     if category_id:
-        filters.append(Item.category_id == category_id)
+        # Categories nest one level. Picking a parent has to show what is on its shelves, or
+        # clicking "Kitchenware" returns nothing once everything is filed under Cookware.
+        children = session.scalars(
+            select(Category.id).where(Category.parent_id == category_id)
+        ).all()
+        filters.append(Item.category_id.in_([category_id, *children]))
     if q:
         like = f"%{q.strip()}%"
         filters.append(
@@ -134,9 +143,7 @@ async def extract(
     data = await _read_upload(image, settings)
     categories = list(session.scalars(select(Category.name).order_by(Category.sort_order)).all())
     try:
-        suggestion = suggest_item(
-            data, image.content_type or "image/jpeg", categories, settings
-        )
+        suggestion = suggest_item(data, image.content_type or "image/jpeg", categories, settings)
     except ExtractionUnavailable as exc:
         # The client falls back to a blank form; this is a designed path, not a crash.
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not read that photo: {exc}")

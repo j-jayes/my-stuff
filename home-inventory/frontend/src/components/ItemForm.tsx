@@ -120,11 +120,27 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
           <span>Category{badge('category')}</span>
           <select value={values.category_id} onChange={set('category_id')} className={mark('category')}>
             <option value="">Unassigned</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
+            {categories
+              .filter((category) => !category.parent_id)
+              .map((parent) => {
+                const children = categories.filter((c) => c.parent_id === parent.id)
+                // A parent with shelves is still selectable — "somewhere in the kitchen" is a
+                // legitimate answer — so it heads its own group rather than becoming a label.
+                return children.length === 0 ? (
+                  <option key={parent.id} value={parent.id}>
+                    {parent.name}
+                  </option>
+                ) : (
+                  <optgroup key={parent.id} label={parent.name}>
+                    <option value={parent.id}>{parent.name} (unsorted)</option>
+                    {children.map((child) => (
+                      <option key={child.id} value={child.id}>
+                        {child.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              })}
           </select>
         </label>
       </div>
