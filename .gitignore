@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+
+# Local data — never commit the inventory or its images
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+data/local/
+home-inventory/backend/dev.sqlite*
+
+# Secrets
+.env
+.env.*
+!.env.example
+*-key.json
+
+# OS
+.DS_Store
