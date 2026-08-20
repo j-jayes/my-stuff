@@ -69,9 +69,15 @@ Status as of 2026-08-19. Phases 1–7 are done, deployed, and verified against t
 
 - [ ] Exercise the capture flow on Jonathan's actual iPhone — the one thing that cannot be
       verified from here, and where the EXIF-rotation and HEIC handling really get tested
-- [ ] Alembic migrations. The schema is currently created by `create_all`, which is fine until
-      the first schema change; add migrations before altering any table
+- [x] Alembic migrations. `create_all` is gone; the database already in storage is stamped at
+      `0001_baseline` and carried forward. Note that SQLite rebuilds a table to alter it, so
+      foreign keys are suspended for the upgrade and `PRAGMA foreign_key_check` verifies the
+      result — an empty database never shows that failure, only one with rows in it
 - [ ] Frontend component tests (Vitest). Currently the frontend is covered only by the manual
       and Playwright passes
+- [ ] Review `scripts/backfill_suggestions.py` output and decide which of the seven scraped
+      items to correct. It proposes and never writes. Two proposals were visibly wrong on the
+      first run — a 445 SEK spoon read as 42 SEK — which is why it does not write
+- [ ] Login rate limiting. `contracts/api.md` claims 10/min per IP; nothing implements it
 - [ ] Board canvas pinch-to-zoom on touch; today scaling is a slider
 - [ ] A "recently added" default sort toggle, if the list ever feels unwieldy

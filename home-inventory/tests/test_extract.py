@@ -8,7 +8,7 @@ request and the conversion of the answer — not the model.
 import pytest
 
 from app.config import Settings
-from app.extract import ItemSuggestion, _to_minor, suggest_item
+from app.extract import ItemSuggestion, _to_minor, resolve_name, suggest_item
 
 
 class StubModels:
@@ -161,3 +161,18 @@ def test_a_real_product_page_extracts_cleanly():
     assert "89x50x226" not in suggestion.name
     # 1 995 kr on the page. Getting this wrong by 100x is the reason Python does the maths.
     assert _to_minor(suggestion.price) == 199500
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        ("Lounge", "Lounge"),
+        ("lounge", "Lounge"),  # the model echoes the note's casing, not the list's
+        ("  KITCHEN  ", "Kitchen"),
+        ("Symaskin", None),  # a real answer, and not a category anyone offered
+        (None, None),
+        ("", None),
+    ],
+)
+def test_an_answer_is_matched_against_what_was_offered(answer, expected):
+    assert resolve_name(["Kitchen", "Lounge"], answer) == expected

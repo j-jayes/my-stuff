@@ -19,6 +19,8 @@ home-inventory/dev.sqlite*
 home-inventory/dev-media/
 home-inventory/app/static/
 home-inventory/frontend/.playwright-mcp/
+# Output of scripts/backfill_suggestions.py: item names, brands and prices
+proposals*.json
 
 # Secrets
 .env

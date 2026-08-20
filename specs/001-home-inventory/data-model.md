@@ -22,8 +22,16 @@ Seeded with: Kitchen, Bedroom, Lounge, Bathroom, Storage Room.
 
 ### `categories`
 
-Same shape as `rooms`. Seeded with: Furniture, Electronics, Major Appliances, Small Appliances,
-Kitchenware, Tools, Decor, Clothing & Accessories, Miscellaneous.
+As `rooms`, plus `parent_id` (TEXT, nullable, FK → `categories.id` ON DELETE RESTRICT). Seeded
+with: Furniture, Electronics, Major Appliances, Small Appliances, Kitchenware, Tools, Decor,
+Clothing & Accessories, Miscellaneous.
+
+Categories nest **one level and no further**. The column cannot express a depth limit, so the
+router enforces it: a parent must itself be top-level. Kitchenware is seeded with twelve
+shelves — Cookware, Bakeware, Kitchen Knives, Cutting Boards, Kitchen Tools & Utensils,
+Dinnerware, Serveware & Trays, Drinkware & Glassware, Cutlery, Barware, Food Storage, Kitchen
+Textiles — topped up by name on boot rather than seeded, because the seed guard only fires on
+an empty table and no existing database has one.
 
 ### `items`
 
@@ -33,7 +41,8 @@ Kitchenware, Tools, Decor, Clothing & Accessories, Miscellaneous.
 | `name` | TEXT | NOT NULL, non-empty after strip |
 | `brand` | TEXT | nullable |
 | `descriptor_notes` | TEXT | nullable |
-| `purchase_price_minor` | INTEGER | nullable, `>= 0` |
+| `purchase_price_minor` | INTEGER | nullable, `>= 0`, the price of **one** unit |
+| `quantity` | INTEGER | not null, default 1, `>= 1` |
 | `currency` | TEXT | nullable, 3 chars, required when price is set |
 | `purchase_date` | TEXT | nullable, `YYYY-MM-DD` |
 | `serial_number` | TEXT | nullable |
@@ -53,11 +62,12 @@ Indexes: `room_id`, `category_id`, `created_at DESC`.
 be deleted). `ai_suggested_fields` exists only so the UI can keep marking untouched values as
 suggestions after a reload; it carries no behaviour.
 
-### `items_fts`
+### Search
 
-SQLite FTS5 virtual table over `items(name, brand, descriptor_notes)`, kept in sync by triggers,
-backing the search in FR-013. With a few thousand rows a `LIKE` scan would also work; FTS5 is
-used because it is built into SQLite and needs no extra dependency.
+FR-013 search is a `LIKE` scan over `items(name, brand, descriptor_notes)`. An FTS5 virtual
+table was specified here and never built; at this size the scan is indistinguishable, and the
+duplicate check in `GET /api/items/similar` could not use an index anyway — it strips accents,
+which SQLite will not do.
 
 ### `boards`
 
@@ -110,7 +120,7 @@ One private GCS bucket, keys namespaced by kind and item id:
 
 ```
 items/{item_id}/original.{ext}
-items/{item_id}/thumb.jpg
+items/{item_id}/thumb.webp
 items/{item_id}/receipt.{ext}
 ```
 

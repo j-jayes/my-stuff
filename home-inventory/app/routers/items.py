@@ -13,7 +13,7 @@ from app.auth import require_session
 from app.config import Settings, get_settings
 from app.db import get_session, save_snapshot
 from app.deps import get_storage, to_detail, to_summary
-from app.extract import ExtractionUnavailable, _to_minor, suggest_item
+from app.extract import ExtractionUnavailable, _to_minor, resolve_name, suggest_item
 from app.imaging import UnreadableImage, extension_for, make_thumbnail
 from app.models import Category, Item, Room, new_id
 from app.schemas import (
@@ -237,16 +237,9 @@ async def suggest(
             )
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not work that out: {exc}")
 
-    # Case-insensitively, and tolerating a name that is in nobody's list. The JSON-schema
-    # enum turns out to be guidance rather than a guarantee: asked about a lamp with only
-    # kitchen shelves on offer, the model answered "Lighting", and asked about "in lounge" it
-    # answered "lounge". Both have to survive, so resolution happens here rather than being
-    # trusted to the schema.
-    def resolve(entities, name: str | None):
-        if not name:
-            return None
-        wanted = name.strip().casefold()
-        return next((e for e in entities if e.name.casefold() == wanted), None)
+    def resolve(entities, answer: str | None):
+        matched = resolve_name([e.name for e in entities], answer)
+        return next((e for e in entities if e.name == matched), None)
 
     # The shelf if the model picked one we recognise, otherwise the top-level category.
     category = resolve(categories, suggestion.subcategory) or resolve(

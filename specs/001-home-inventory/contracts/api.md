@@ -90,6 +90,7 @@ List responses carry `thumb_url` only — never the full-size image (FR-023).
   "descriptor_notes": "Elm seat, beech legs, mid-century",
   "purchase_price_minor": 450000,
   "currency": "SEK",
+  "quantity": 1,
   "purchase_date": "2024-03-11",
   "serial_number": null,
   "source_url": null,
@@ -98,6 +99,10 @@ List responses carry `thumb_url` only — never the full-size image (FR-023).
   "ai_suggested_fields": ["name", "brand", "descriptor_notes"]
 }
 ```
+
+`quantity` is how many of the thing the row stands for, and defaults to 1;
+`purchase_price_minor` is the price of **one** of them. A `PATCH` that does not mention
+`quantity` leaves it alone, like every other field.
 
 **201** with the same body as `GET /api/items/{id}`. Uploads over 20 MB → **413**.
 
@@ -113,54 +118,83 @@ replaces the stored photo and regenerates the thumbnail; the old objects are del
 
 ## Capture helpers
 
-### `POST /api/items/extract`
+### `POST /api/items/suggest`
 
-`multipart/form-data` with one `image` part. Sends the image to the model and returns
-suggestions **without creating anything** (FR-002).
+`multipart/form-data` with any combination of `image`, `url` and `note` — at least one, or
+**400**. One endpoint rather than three, because they are the same question asked with
+different evidence, and the owner can supply more than one at a time. Returns a filled-in
+form **without creating anything** (FR-002).
 
 ```json
 // 200
 {
-  "name": "Wooden dining chair",
-  "category": "Furniture",
-  "brand": null,
-  "descriptor_notes": "Mid-century elm and beech chair with a curved back"
+  "name": "01 Kitchen Spoon",
+  "brand": "Gestura",
+  "descriptor_notes": "Mirror-finish 18/10 stainless steel cooking spoon made in Japan.",
+  "category_id": "…", "room_id": "…",
+  "purchase_price_minor": 44500, "currency": "SEK",
+  "purchase_date": "2025-06-01", "quantity": 6,
+  "source_url": "https://…", "image_url": "https://…",
+  "suggested_fields": ["name", "brand", "category", "room", "price", "quantity"]
 }
 ```
 
-`category` is echoed only if it matches an existing category name; otherwise it is returned as
-`null` (edge case: model invents a category). Model failure → **502**, model timeout (8s) →
-**504**. In both cases the client falls back to a blank form (FR-004), so these are expected,
-handled outcomes rather than errors the owner sees as a crash.
+Ids, not names, so the client can drop them straight into its selects. `suggested_fields`
+names what the model filled, so the form can badge those as guesses.
 
-### `POST /api/items/scrape`
+When `url` is given, the page is fetched server-side and reduced to a digest — meta tags, any
+`schema.org` JSON-LD, and the visible text — which is what the model reads. That digest is
+untrusted third-party text: it is fenced and labelled as data in the prompt, the fields it
+could steer are constrained to the owner's own lists, and the result only ever pre-fills an
+editable form.
 
-```json
-// request
-{ "url": "https://example.com/product/123" }
-// 200
-{ "title": "Ercol Windsor Chair", "image_url": "https://…", "source_url": "https://…" }
-```
+Prices come back from the model as printed (`"1995"`) and are converted to minor units in
+Python. Asking the model for minor units would be asking it to multiply by 100 on every
+extraction, where a 100× error is silent and plausible.
 
-Fetches the page server-side, reads `og:image` / `og:title`, falling back to `twitter:image`
-and `<title>`. Hard 6-second timeout → **504** (FR-006). No image found → **200** with
-`image_url: null` so the client can offer the manual form (US3 scenario 3).
+Category, subcategory and room are **resolved** against the owner's lists case-insensitively,
+and anything unrecognised is dropped — the JSON-schema `enum` steers the model but does not
+bind it. A subcategory that does not exist falls back to the top-level category.
 
-The fetched `image_url` is downloaded and stored server-side when the item is saved; the client
-posts it back as `payload.source_image_url` rather than re-uploading bytes.
+Model failure → **502**, model timeout (8s) → **504**, page timeout (6s) → **504**. If a page
+was fetched but the model is unavailable, the response is **200** carrying `og:title` and
+`og:image` instead — the old behaviour, so the link path is never worse than it was. A page
+with no image is **200** with `image_url: null` (US3 scenario 3).
+
+The returned `image_url` is downloaded and stored server-side when the item is saved; the
+client posts it back as `payload.source_image_url` rather than re-uploading bytes.
 
 **SSRF guard**: only `http`/`https`, and the resolved IP must be public — private, loopback,
 and link-local ranges are rejected with **400**.
+
+### `GET /api/items/brands`
+
+**200** `[{ "name": "Fiskars", "item_count": 2 }]`, commonest first. Feeds the brand field's
+autocomplete. A brand is stored with whichever spelling most items already use, so `ikea`
+saved against an inventory holding `Ikea` is stored as `Ikea`.
+
+### `GET /api/items/similar?name=…`
+
+**200** `[ItemSummary]`, at most 5. Items whose names share a distinctive word with `name`,
+compared with accents stripped — `Poang armchair` finds `POÄNG`, which a SQL `LIKE` cannot.
+Common words (`chair`, `table`, `set`) do not count, and brand is not part of the comparison:
+owning two IKEA things is normal. A warning for the client to show, never a block.
 
 ## Rooms and categories
 
 ### `GET /api/rooms`, `GET /api/categories`
 
-**200** `[{ "id": "…", "name": "Kitchen", "item_count": 12 }]`
+**200** `[{ "id": "…", "name": "Kitchen", "item_count": 12, "parent_id": null }]`
+
+Categories nest one level: `parent_id` names the category a shelf sits under, and is always
+`null` for rooms. A parent's `item_count` includes its children's, because selecting a parent
+filters to its children's items too.
 
 ### `POST /api/rooms`, `POST /api/categories`
 
-`{ "name": "Garage" }` → **201**. Duplicate name → **409**.
+`{ "name": "Garage" }` → **201**. Duplicate name → **409**. Categories also accept
+`parent_id`; a parent that does not exist, or that is itself a shelf, → **400**. One level
+only.
 
 ### `PATCH /api/rooms/{id}`, `PATCH /api/categories/{id}`
 
@@ -169,7 +203,7 @@ and link-local ranges are rejected with **400**.
 ### `DELETE /api/rooms/{id}`, `DELETE /api/categories/{id}`
 
 **204** when unused; **409** `{"detail": "3 items are still in this room"}` when in use
-(FR-015).
+(FR-015). A category that still has shelves inside it → **409**.
 
 ## Boards
 

@@ -66,6 +66,20 @@ class ExtractionUnavailable(Exception):
     """The model could not be reached or did not answer. The caller falls back to a blank form."""
 
 
+def resolve_name(names: list[str], answer: str | None) -> str | None:
+    """Match a name the model returned against the list it was offered, ignoring case.
+
+    Needed because the JSON-schema enum is guidance rather than a guarantee: asked about
+    "in lounge" the model answers "lounge", and asked to categorise a sewing machine it has
+    answered "Symaskin" — a name in nobody's list. Anything unrecognised comes back as None
+    so the caller can fall back rather than storing an invention.
+    """
+    if not answer:
+        return None
+    wanted = answer.strip().casefold()
+    return next((name for name in names if name.casefold() == wanted), None)
+
+
 def _to_minor(price: str | None) -> int | None:
     """Minor units from what the page printed — öre from kronor.
 
