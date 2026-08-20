@@ -146,3 +146,60 @@ def test_a_database_with_items_in_it_still_migrates(settings):
         )
         assert connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall() == []
     engine.dispose()
+
+
+def test_categories_added_to_the_seed_list_reach_an_existing_database(settings):
+    """The failure this guards: seeding in application code only fires on an empty table, so
+    a category added to the seed list after first boot never appeared on any database that
+    already existed. Every real database is in that state.
+    """
+    config = db._alembic_config()
+    engine = sa.create_engine(f"sqlite:///{settings.db_path}")
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0003_category_parent")
+        # The nine categories the very first version shipped with, and nothing else.
+        for order, name in enumerate(["Furniture", "Electronics", "Kitchenware", "Miscellaneous"]):
+            connection.execute(
+                sa.text(
+                    "INSERT INTO categories (id, name, sort_order, created_at)"
+                    f" VALUES ('cat-{order}', :name, {order}, '2026-01-01T00:00:00Z')"
+                ),
+                {"name": name},
+            )
+    engine.dispose()
+
+    db.reset_for_tests()
+    db.init(settings)
+    db.reset_for_tests()
+
+    engine = sa.create_engine(f"sqlite:///{settings.db_path}")
+    with engine.connect() as connection:
+        rows = connection.execute(sa.text("SELECT name, parent_id FROM categories")).all()
+    engine.dispose()
+
+    names = {name for name, _ in rows}
+    assert {"Lighting", "Bedding & Linen", "Bathroom & Grooming"} <= names
+    assert {"Cookware", "Towels", "Bathroom Storage"} <= names
+    # The four it started with are still the same rows, not duplicated.
+    assert len([n for n, _ in rows if n == "Kitchenware"]) == 1
+    parents = {parent for _, parent in rows if parent}
+    assert "cat-2" in parents  # shelves hang off the Kitchenware that was already there
+
+
+def test_a_deleted_seed_category_is_not_resurrected(settings):
+    """Topping up on every boot would put back a category the owner deliberately removed.
+    Doing it in a migration means it happens once."""
+    db.reset_for_tests()
+    db.init(settings)
+
+    with db._session_factory() as session:
+        victim = session.scalar(sa.select(db.Category).where(db.Category.name == "Barware"))
+        session.delete(victim)
+        session.commit()
+    db.reset_for_tests()
+
+    db.init(settings)
+    with db._session_factory() as session:
+        assert session.scalar(sa.select(db.Category).where(db.Category.name == "Barware")) is None
+    db.reset_for_tests()

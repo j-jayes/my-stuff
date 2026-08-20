@@ -136,15 +136,15 @@ def test_a_name_that_differs_only_in_case_still_resolves(signed_in, rooms, monke
 
 
 def test_an_invented_subcategory_falls_back_to_the_category(signed_in, categories, monkeypatch):
-    """The JSON-schema enum is guidance, not a guarantee — asked for a lamp with only kitchen
-    shelves on offer, the model returned "Lighting", which is in nobody's list. A name that
-    does not exist must not throw away the top-level answer that does.
+    """The JSON-schema enum is guidance, not a guarantee — asked to file a sewing machine the
+    model answered "Symaskin", which is in nobody's list. A name that does not exist must not
+    throw away the top-level answer that does.
     """
-    answer(monkeypatch, category="Furniture", subcategory="Lighting")
+    answer(monkeypatch, category="Small Appliances", subcategory="Symaskin")
 
-    body = signed_in.post("/api/items/suggest", data={"note": "a lamp"}).json()
+    body = signed_in.post("/api/items/suggest", data={"note": "a sewing machine"}).json()
 
-    assert body["category_id"] == categories["Furniture"]
+    assert body["category_id"] == categories["Small Appliances"]
 
 
 def test_an_invented_category_leaves_the_field_empty(signed_in, monkeypatch):

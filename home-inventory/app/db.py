@@ -13,13 +13,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
-from app.models import (
-    SEED_CATEGORIES,
-    SEED_KITCHENWARE_SUBCATEGORIES,
-    SEED_ROOMS,
-    Category,
-    Room,
-)
+from app.models import SEED_CATEGORIES, SEED_ROOMS, SEED_SUBCATEGORIES, Category, Room
 from app.snapshot import DatabaseSnapshot, GcsObjectStore
 
 ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
@@ -126,26 +120,24 @@ def _seed(session: Session) -> None:
     if session.scalar(select(Room).limit(1)) is None:
         session.add_all(Room(name=n, sort_order=i) for i, n in enumerate(SEED_ROOMS))
     if session.scalar(select(Category).limit(1)) is None:
-        session.add_all(Category(name=n, sort_order=i) for i, n in enumerate(SEED_CATEGORIES))
-        session.flush()
-    _seed_kitchenware_subcategories(session)
+        _seed_categories(session)
 
 
-def _seed_kitchenware_subcategories(session: Session) -> None:
-    """Top up by name rather than seeding, because the categories table is not empty on any
-    database that already existed — the guard above would skip it forever.
+def _seed_categories(session: Session) -> None:
+    """Fill a brand new database with the whole category tree.
 
-    Anything the owner has since renamed or deleted stays deleted: only names that are
-    missing are added, and only while Kitchenware itself is still there.
+    Only ever called on an empty table. An existing database is topped up by migration
+    0004 instead, so that a category deleted afterwards is not resurrected on the next boot.
     """
-    kitchenware = session.scalar(select(Category).where(Category.name == "Kitchenware"))
-    if kitchenware is None:
-        return
-    existing = set(session.scalars(select(Category.name)))
+    parents = {
+        name: Category(name=name, sort_order=order) for order, name in enumerate(SEED_CATEGORIES)
+    }
+    session.add_all(parents.values())
+    session.flush()
     session.add_all(
-        Category(name=name, parent_id=kitchenware.id, sort_order=i)
-        for i, name in enumerate(SEED_KITCHENWARE_SUBCATEGORIES)
-        if name not in existing
+        Category(name=name, parent_id=parents[parent_name].id, sort_order=order)
+        for parent_name, shelves in SEED_SUBCATEGORIES.items()
+        for order, name in enumerate(shelves)
     )
 
 

@@ -12,8 +12,8 @@ def create(client, photo=None, **fields):
 def test_the_default_rooms_and_categories_are_seeded(rooms, categories):
     assert set(rooms) == {"Kitchen", "Bedroom", "Lounge", "Bathroom", "Storage Room"}
     assert "Clothing & Accessories" in categories
-    # Nine top-level categories, plus the twelve that live under Kitchenware.
-    assert len(categories) == 21
+    # Twelve top-level categories, plus the nineteen shelves under three of them.
+    assert len(categories) == 31
 
 
 def test_an_item_saves_with_its_photo_and_gets_a_thumbnail(signed_in, photo, rooms, categories):

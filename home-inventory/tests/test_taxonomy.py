@@ -36,14 +36,24 @@ def test_kitchenware_is_seeded_with_its_shelves(signed_in):
     )
 
 
-def test_every_other_category_stays_flat(signed_in):
+def test_only_the_categories_that_need_shelves_have_them(signed_in):
     by_name = entries(signed_in)
-    kitchenware_id = by_name["Kitchenware"]["id"]
+    with_shelves = {"Kitchenware", "Bedding & Linen", "Bathroom & Grooming"}
 
-    for name in ("Furniture", "Electronics", "Tools", "Decor", "Miscellaneous"):
-        assert by_name[name]["parent_id"] is None
-    children = [c for c in by_name.values() if c["parent_id"] is not None]
-    assert {c["parent_id"] for c in children} == {kitchenware_id}
+    for name in ("Furniture", "Lighting", "Electronics", "Tools", "Decor", "Miscellaneous"):
+        assert by_name[name]["parent_id"] is None, name
+
+    parents = {c["parent_id"] for c in by_name.values() if c["parent_id"]}
+    assert parents == {by_name[name]["id"] for name in with_shelves}
+
+
+def test_towels_have_exactly_one_home(signed_in):
+    """Splitting bath towels from beach towels would mean deciding, item by item, which a
+    given towel is. Bedding & Linen owns all of them."""
+    by_name = entries(signed_in)
+
+    assert by_name["Towels"]["parent_id"] == by_name["Bedding & Linen"]["id"]
+    assert "Bath Linen" not in by_name
 
 
 def test_a_subcategory_can_be_added_under_a_parent(signed_in):

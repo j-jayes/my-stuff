@@ -143,30 +143,51 @@ class BoardItem(Base):
 SEED_ROOMS = ["Kitchen", "Bedroom", "Lounge", "Bathroom", "Storage Room"]
 SEED_CATEGORIES = [
     "Furniture",
+    "Lighting",
     "Electronics",
     "Major Appliances",
     "Small Appliances",
     "Kitchenware",
+    "Bedding & Linen",
+    "Bathroom & Grooming",
     "Tools",
     "Decor",
     "Clothing & Accessories",
     "Miscellaneous",
 ]
-# Kitchenware alone was doing the work of a dozen shelves — a cooking spoon, a bread knife
-# and a 5.5 L casserole all landed in it. The names follow the Google product taxonomy's
-# Kitchen & Dining branch, in British usage: "Cutlery" is what goes on the table, and
-# "crockery" and "plates and bowls" are one shelf under its trade name, Dinnerware.
-SEED_KITCHENWARE_SUBCATEGORIES = [
-    "Cookware",
-    "Bakeware",
-    "Kitchen Knives",
-    "Cutting Boards",
-    "Kitchen Tools & Utensils",
-    "Dinnerware",
-    "Serveware & Trays",
-    "Drinkware & Glassware",
-    "Cutlery",
-    "Barware",
-    "Food Storage",
-    "Kitchen Textiles",
-]
+# Shelves, by the category they hang under. Kitchenware alone was doing the work of a dozen —
+# a cooking spoon, a bread knife and a 5.5 L casserole all landed in it. The names follow the
+# Google product taxonomy's Kitchen & Dining branch, in British usage: "Cutlery" is what goes
+# on the table, and "crockery" and "plates and bowls" are one shelf under its trade name,
+# Dinnerware.
+#
+# Towels live under Bedding & Linen rather than Bathroom & Grooming so that they have exactly
+# one home — a beach towel is not a bathroom item, and splitting them by intended use would
+# mean deciding case by case where each one belongs.
+SEED_SUBCATEGORIES = {
+    "Kitchenware": [
+        "Cookware",
+        "Bakeware",
+        "Kitchen Knives",
+        "Cutting Boards",
+        "Kitchen Tools & Utensils",
+        "Dinnerware",
+        "Serveware & Trays",
+        "Drinkware & Glassware",
+        "Cutlery",
+        "Barware",
+        "Food Storage",
+        "Kitchen Textiles",
+    ],
+    "Bedding & Linen": [
+        "Bed Linen",
+        "Duvets & Pillows",
+        "Blankets & Throws",
+        "Towels",
+    ],
+    "Bathroom & Grooming": [
+        "Bathroom Storage",
+        "Bathroom Fittings",
+        "Grooming & Personal Care",
+    ],
+}
