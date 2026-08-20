@@ -176,3 +176,28 @@ def test_a_real_product_page_extracts_cleanly():
 )
 def test_an_answer_is_matched_against_what_was_offered(answer, expected):
     assert resolve_name(["Kitchen", "Lounge"], answer) == expected
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("note", "expected"),
+    [
+        ("Duralex drinking tumbler in yellow", "yellow"),
+        ("Duralex drinking tumbler in purple", "purple"),
+        ("Mungo Folly beach towel in the hermit crab colourway", "hermit crab"),
+    ],
+)
+def test_the_thing_that_tells_two_items_apart_stays_in_the_name(note, expected):
+    """Six tumblers in three colours are three rows, and "drinking tumbler" three times over
+    is useless in a grid. Whatever distinguishes one from the next belongs in the name, not
+    only in the notes.
+    """
+    suggestion = suggest_item(
+        Settings(),
+        categories=["Kitchenware", "Furniture"],
+        subcategories=["Drinkware & Glassware", "Kitchen Textiles"],
+        rooms=["Kitchen", "Lounge"],
+        note=note,
+    )
+
+    assert expected.casefold() in suggestion.name.casefold(), suggestion.name
