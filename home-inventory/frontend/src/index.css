@@ -530,10 +530,15 @@ label > span {
   justify-content: center;
 }
 
+/* Padded to fit rather than cropped to fill: a garment shot for a shop is taller than this
+   frame, and filling it crops away the collar and the hem — the parts that say which shirt it
+   is. The mat goes on the picture rather than the frame so that a tile with no photograph
+   keeps the sunken ground and does not become a white slab. */
 .tile-frame img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--photo-mat);
   display: block;
   transition: transform 0.4s ease;
 }
@@ -730,13 +735,17 @@ label > span {
 .board-card .board-empty {
   width: 60px;
   height: 60px;
-  object-fit: cover;
+  object-fit: contain;
   flex: none;
   background: var(--surface-sunken);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--muted);
+}
+
+.board-card img {
+  background: var(--photo-mat);
 }
 
 .canvas {
@@ -772,10 +781,13 @@ label > span {
   scrollbar-width: thin;
 }
 
+/* Same reasoning as the grid tiles, and it matters more here: picking a top out of a row of
+   64px squares is impossible if each one is a crop of the middle of a garment. */
 .tray img {
   width: 64px;
   height: 64px;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--photo-mat);
   flex: none;
   cursor: pointer;
   border: var(--rule) solid var(--border);

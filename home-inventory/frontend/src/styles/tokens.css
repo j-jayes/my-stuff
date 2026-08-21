@@ -102,6 +102,11 @@
   --danger-soft: #f7e6e3;
 
   --shadow-raised: 0 1px 2px rgb(38 38 42 / 6%);
+
+  /* The ground a photographed thing is shown against, and the only colour here that does not
+   * change with the theme. Product photography is shot on white, so anything else puts a seam
+   * around the picture where the padding meets its own background. */
+  --photo-mat: #ffffff;
   color-scheme: light dark;
 }
 
