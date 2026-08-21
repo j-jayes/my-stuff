@@ -251,6 +251,42 @@ def test_a_patch_that_says_nothing_about_quantity_leaves_it_alone(signed_in):
     assert updated.json()["quantity"] == 6
 
 
+def test_a_thing_is_bought_new_unless_told_otherwise(signed_in):
+    item = create(signed_in)
+
+    assert item["second_hand"] is False
+
+
+def test_a_thing_can_be_recorded_as_bought_second_hand(signed_in):
+    """Half a wardrobe is bought used, and what was paid for it says nothing about that."""
+    item = create(signed_in, name="Oxford shirt, blue", second_hand=True)
+
+    assert item["second_hand"] is True
+    assert signed_in.get(f"/api/items/{item['id']}").json()["second_hand"] is True
+
+
+def test_a_patch_that_says_nothing_about_second_hand_leaves_it_alone(signed_in):
+    """It carries a default, so a partial patch must not quietly turn a used shirt new."""
+    item = create(signed_in, second_hand=True)
+
+    updated = signed_in.patch(
+        f"/api/items/{item['id']}", data={"payload": json.dumps({"brand": "Asket"})}
+    )
+
+    assert updated.json()["second_hand"] is True
+
+
+def test_second_hand_can_be_corrected_afterwards(signed_in):
+    item = create(signed_in, second_hand=True)
+
+    updated = signed_in.patch(
+        f"/api/items/{item['id']}", data={"payload": json.dumps({"second_hand": False})}
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["second_hand"] is False
+
+
 def test_the_brands_already_in_use_can_be_listed(signed_in):
     create(signed_in, name="Chair", brand="Ercol")
     create(signed_in, name="Stool", brand="Ercol")

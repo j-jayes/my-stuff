@@ -364,6 +364,24 @@ label > span {
   color: var(--muted);
 }
 
+/* A tickbox reads left-to-right: the box, then what ticking it means. Its label sits beside
+   the input rather than above it, unlike every other field. */
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.checkbox-field > span {
+  margin-bottom: 0;
+  color: var(--text);
+}
+
+.checkbox-field input {
+  width: auto;
+  margin: 0;
+}
+
 .row {
   display: flex;
   gap: var(--s-3);

@@ -9,6 +9,7 @@ export type FormValues = {
   price: string
   currency: string
   quantity: string
+  second_hand: boolean
   purchase_date: string
   serial_number: string
   room_id: string
@@ -22,6 +23,7 @@ export const emptyValues: FormValues = {
   price: '',
   currency: 'SEK',
   quantity: '1',
+  second_hand: false,
   purchase_date: '',
   serial_number: '',
   room_id: '',
@@ -36,6 +38,7 @@ export function valuesFromItem(item: ItemDetail): FormValues {
     price: item.purchase_price_minor === null ? '' : String(item.purchase_price_minor / 100),
     currency: item.currency ?? 'SEK',
     quantity: String(item.quantity),
+    second_hand: item.second_hand,
     purchase_date: item.purchase_date ?? '',
     serial_number: item.serial_number ?? '',
     room_id: item.room?.id ?? '',
@@ -62,6 +65,7 @@ export function toPayload(values: FormValues, suggested: string[]): Record<strin
     category_id: values.category_id || null,
     purchase_date: values.purchase_date || null,
     quantity: Math.max(1, Math.round(Number(values.quantity) || 1)),
+    second_hand: values.second_hand,
     ai_suggested_fields: suggested,
   }
   const price = values.price.trim()
@@ -100,6 +104,10 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
 
   const set = (field: keyof FormValues) => (event: { target: { value: string } }) =>
     onChange({ ...values, [field]: event.target.value })
+
+  // A checkbox reports itself in `checked`, not `value`, so it cannot use `set`.
+  const toggle = (field: keyof FormValues) => (event: { target: { checked: boolean } }) =>
+    onChange({ ...values, [field]: event.target.checked })
 
   const quantity = Math.max(1, Math.round(Number(values.quantity) || 1))
   const unitPrice = values.price.trim() === '' ? null : Math.round(Number(values.price) * 100)
@@ -233,6 +241,11 @@ export default function ItemForm({ values, onChange, suggested, onSubmit, submit
           <input value={values.serial_number} onChange={set('serial_number')} />
         </label>
       </div>
+
+      <label className="checkbox-field">
+        <input type="checkbox" checked={values.second_hand} onChange={toggle('second_hand')} />
+        <span>Bought second hand{badge('second_hand')}</span>
+      </label>
 
       <button className="primary full" disabled={busy || !values.name.trim()}>
         {busy ? <span className="spinner" /> : submitLabel}

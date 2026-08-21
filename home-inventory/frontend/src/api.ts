@@ -18,6 +18,7 @@ export type ItemSummary = {
 
 export type ItemDetail = ItemSummary & {
   descriptor_notes: string | null
+  second_hand: boolean
   purchase_date: string | null
   serial_number: string | null
   source_url: string | null
@@ -40,6 +41,8 @@ export type Suggestion = {
   purchase_date: string | null
   quantity: number
   source_url: string | null
+  /** Null when nothing said either way, which is not the same as "bought new". */
+  second_hand: boolean | null
   image_url: string | null
   suggested_fields: string[]
 }

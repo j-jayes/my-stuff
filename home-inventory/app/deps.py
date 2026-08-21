@@ -57,6 +57,7 @@ def to_detail(item: Item) -> ItemDetail:
     return ItemDetail(
         **to_summary(item).model_dump(),
         descriptor_notes=item.descriptor_notes,
+        second_hand=item.second_hand,
         purchase_date=item.purchase_date,
         serial_number=item.serial_number,
         source_url=item.source_url,

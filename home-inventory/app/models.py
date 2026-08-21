@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Float,
     ForeignKey,
@@ -77,6 +78,11 @@ class Item(Base):
     # How many of the thing this row stands for. The price above is per one of them.
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     currency: Mapped[str | None] = mapped_column(String(3))
+    # Bought used. Says nothing about the price — what was paid is what was paid — but it is
+    # why a shirt cost a third of its shop price, and it is worth knowing years later.
+    second_hand: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     purchase_date: Mapped[str | None] = mapped_column(String)
     serial_number: Mapped[str | None] = mapped_column(String)
     source_url: Mapped[str | None] = mapped_column(String)

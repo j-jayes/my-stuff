@@ -128,6 +128,7 @@ def _apply(item: Item, body: ItemWrite, fields_sent: set[str], session: Session)
         "purchase_price_minor",
         "currency",
         "quantity",
+        "second_hand",
         "serial_number",
         "source_url",
         "room_id",
@@ -330,6 +331,8 @@ async def suggest(
         "purchase_date": _sane_date(suggestion.purchase_date),
         "quantity": suggestion.quantity if suggestion.quantity > 1 else None,
         "price": price_minor,
+        # Badged only when it is news; a null or a false is the form's own default.
+        "second_hand": suggestion.second_hand or None,
     }
     return SuggestionResponse(
         name=suggestion.name,
@@ -341,6 +344,7 @@ async def suggest(
         currency=suggestion.currency if price_minor is not None else None,
         purchase_date=_sane_date(suggestion.purchase_date),
         quantity=suggestion.quantity,
+        second_hand=suggestion.second_hand,
         source_url=url,
         image_url=page.image_url if page else None,
         suggested_fields=[field for field, value in filled.items() if value],

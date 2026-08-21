@@ -44,7 +44,8 @@ class StubClient:
 ANSWER = """
 {"name": "All Steel brodkniv", "brand": "Fiskars", "category": "Kitchenware",
  "subcategory": "Kitchen Knives", "room": "Kitchen", "descriptor_notes": "A bread knife.",
- "price": "599", "currency": "SEK", "purchase_date": "2025-06-01", "quantity": 1}
+ "price": "599", "currency": "SEK", "purchase_date": "2025-06-01", "quantity": 1,
+ "second_hand": true}
 """
 
 LISTS = {
@@ -140,6 +141,7 @@ def test_the_answer_comes_back_as_an_item(stub):
         currency="SEK",
         purchase_date="2025-06-01",
         quantity=1,
+        second_hand=True,
     )
     assert _to_minor(suggestion.price) == 59900
 

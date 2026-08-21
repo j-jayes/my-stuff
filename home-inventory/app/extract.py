@@ -38,7 +38,10 @@ SYSTEM_INSTRUCTION = (
     "price is for a single one of the thing, written as plain digits with at most one decimal "
     "point, exactly as the page states it. Do not convert it to cents or öre.\n"
     "quantity is how many physical units the listing or note describes: 6 for a set of six "
-    "glasses, otherwise 1."
+    "glasses, otherwise 1.\n"
+    "second_hand is true only where the owner says they bought it used — 'second hand', "
+    "'used', 'pre-owned', 'vintage', 'from a charity shop'. A product page says nothing about "
+    "how this particular one was bought, so leave it null unless the note says so."
 )
 
 PROMPT = "Catalogue this household object for a home inventory."
@@ -66,6 +69,13 @@ class ItemSuggestion(BaseModel):
     )
     currency: str | None = Field(default=None, description="ISO-4217 code, e.g. 'SEK'.")
     purchase_date: str | None = Field(default=None, description="YYYY-MM-DD, or null.")
+    second_hand: bool | None = Field(
+        default=None,
+        description=(
+            "True only if the note or page says it was bought used, second hand, vintage or "
+            "pre-owned. Null when nothing is said either way."
+        ),
+    )
 
 
 # Asking for one product page, from the maker or a real retailer, in the owner's own market.

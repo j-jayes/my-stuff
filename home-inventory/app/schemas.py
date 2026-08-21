@@ -42,6 +42,7 @@ class ItemWrite(BaseModel):
     purchase_price_minor: int | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     quantity: int = Field(default=1, ge=1)
+    second_hand: bool = False
     purchase_date: date | None = None
     serial_number: str | None = None
     source_url: str | None = None
@@ -92,6 +93,7 @@ class ItemSummary(BaseModel):
 
 class ItemDetail(ItemSummary):
     descriptor_notes: str | None
+    second_hand: bool
     purchase_date: str | None
     serial_number: str | None
     source_url: str | None
@@ -126,6 +128,9 @@ class SuggestionResponse(BaseModel):
     quantity: int = 1
     # Where the answer came from, for the client to keep alongside the item.
     source_url: str | None = None
+    # Null rather than false when the model was told nothing: silence is not evidence that a
+    # thing was bought new.
+    second_hand: bool | None = None
     image_url: str | None = None
     # Which of the above the model supplied, so the form can mark them as guesses.
     suggested_fields: list[str] = Field(default_factory=list)

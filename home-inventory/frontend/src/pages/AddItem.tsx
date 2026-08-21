@@ -50,6 +50,7 @@ export default function AddItem() {
         room_id: suggestion.room_id ?? current.room_id,
         purchase_date: suggestion.purchase_date ?? current.purchase_date,
         quantity: String(suggestion.quantity),
+        second_hand: suggestion.second_hand ?? current.second_hand,
         price:
           suggestion.purchase_price_minor === null
             ? current.price

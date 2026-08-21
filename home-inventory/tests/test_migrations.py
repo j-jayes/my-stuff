@@ -74,11 +74,12 @@ def test_a_pre_alembic_database_is_adopted_rather_than_rebuilt(settings):
     engine = sa.create_engine(f"sqlite:///{settings.db_path}")
     with engine.connect() as connection:
         row = connection.execute(
-            sa.text("SELECT name, quantity FROM items WHERE id='keep-me'")
+            sa.text("SELECT name, quantity, second_hand FROM items WHERE id='keep-me'")
         ).one()
-        # The row survives, and a column added after it was written gets the default.
+        # The row survives, and columns added after it was written get their defaults.
         assert row.name == "Steam iron"
         assert row.quantity == 1
+        assert row.second_hand == 0
         version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar()
     engine.dispose()
     assert version == db.head_revision()

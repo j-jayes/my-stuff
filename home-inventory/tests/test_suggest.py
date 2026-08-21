@@ -138,6 +138,26 @@ def test_a_note_with_no_page_has_nothing_to_fall_back_to(signed_in, monkeypatch)
     assert signed_in.post("/api/items/suggest", data={"note": "a knife"}).status_code == 502
 
 
+def test_a_note_saying_it_was_bought_used_ticks_second_hand(signed_in, monkeypatch):
+    answer(monkeypatch, second_hand=True)
+
+    body = signed_in.post("/api/items/suggest", data={"note": "a knife, second hand"}).json()
+
+    assert body["second_hand"] is True
+    assert "second_hand" in body["suggested_fields"]
+
+
+def test_saying_nothing_about_how_it_was_bought_claims_nothing(signed_in, monkeypatch):
+    """Silence is not evidence that a thing was bought new, so the box is left unticked and
+    unbadged rather than asserted."""
+    answer(monkeypatch)
+
+    body = signed_in.post("/api/items/suggest", data={"note": "a knife"}).json()
+
+    assert body["second_hand"] is None
+    assert "second_hand" not in body["suggested_fields"]
+
+
 def test_a_name_that_differs_only_in_case_still_resolves(signed_in, rooms, monkeypatch):
     """Asked about "in lounge", the model answers "lounge". Matching exactly would drop it."""
     answer(monkeypatch, room="lounge", category="kitchenware", subcategory="kitchen knives")

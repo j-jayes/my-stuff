@@ -94,6 +94,7 @@ export default function ItemDetail() {
             <>
               <h1>Edit</h1>
               {error && <p className="error">{error}</p>}
+    ['Second hand', item.second_hand ? 'Yes' : null],
               <div style={{ marginTop: 'var(--s-5)' }}>
                 <ItemForm
                   values={values}
