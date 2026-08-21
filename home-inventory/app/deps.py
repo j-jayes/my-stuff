@@ -28,8 +28,16 @@ def get_storage() -> MediaStorage:
     return _storage
 
 
-def media_url(key: str | None) -> str | None:
-    return f"/api/media/{key}" if key else None
+def media_url(key: str | None, version: str | None = None) -> str | None:
+    """The address of a stored object, stamped with when the item last changed.
+
+    A thumbnail is always thumb.webp and media is served immutable for a year, so replacing an
+    item's picture leaves every browser showing the old one until the URL itself changes. The
+    stamp is what changes it. It is ignored by the media route, which matches on path alone.
+    """
+    if not key:
+        return None
+    return f"/api/media/{key}?v={version}" if version else f"/api/media/{key}"
 
 
 def _ref(entity) -> NamedRef | None:
@@ -41,7 +49,7 @@ def to_summary(item: Item) -> ItemSummary:
         id=item.id,
         name=item.name,
         brand=item.brand,
-        thumb_url=media_url(item.thumb_key),
+        thumb_url=media_url(item.thumb_key, item.updated_at),
         room=_ref(item.room),
         category=_ref(item.category),
         purchase_price_minor=item.purchase_price_minor,
@@ -61,8 +69,9 @@ def to_detail(item: Item) -> ItemDetail:
         purchase_date=item.purchase_date,
         serial_number=item.serial_number,
         source_url=item.source_url,
-        image_url=media_url(item.image_key),
-        receipt_url=media_url(item.receipt_key),
+        image_url=media_url(item.image_key, item.updated_at),
+        receipt_url=media_url(item.receipt_key, item.updated_at),
+        source_photo_url=media_url(item.source_image_key, item.updated_at),
         ai_suggested_fields=json.loads(item.ai_suggested_fields) if item.ai_suggested_fields else [],
         updated_at=item.updated_at,
     )

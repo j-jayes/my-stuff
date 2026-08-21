@@ -12,6 +12,8 @@ PROTECTED = [
     ("get", "/api/items/anything"),
     ("delete", "/api/items/anything"),
     ("post", "/api/items/suggest"),
+    ("post", "/api/items/anything/product-photo"),
+    ("post", "/api/items/anything/product-photo/accept"),
     ("get", "/api/items/brands"),
     ("get", "/api/items/similar?name=x"),
     ("get", "/api/rooms"),

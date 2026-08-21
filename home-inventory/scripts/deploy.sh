@@ -24,7 +24,7 @@ gcloud run deploy "$SERVICE" \
   --max-instances 1 \
   --concurrency 20 \
   --timeout 120 \
-  --set-env-vars "STORAGE_BACKEND=gcs,MEDIA_BUCKET=${PROJECT}-media,DB_BUCKET=${PROJECT}-db,DB_PATH=/srv/data/inventory.sqlite,GCP_PROJECT=${PROJECT},GEMINI_LOCATION=global,GEMINI_MODEL=gemini-3.1-flash-lite" \
+  --set-env-vars "STORAGE_BACKEND=gcs,MEDIA_BUCKET=${PROJECT}-media,DB_BUCKET=${PROJECT}-db,DB_PATH=/srv/data/inventory.sqlite,GCP_PROJECT=${PROJECT},GEMINI_LOCATION=global,GEMINI_MODEL=gemini-3.1-flash-lite,GEMINI_IMAGE_MODEL=gemini-3.1-flash-image" \
   --set-secrets "APP_PASSWORD=inventory-app-password:latest,SESSION_SECRET=inventory-session-key:latest"
 
 echo

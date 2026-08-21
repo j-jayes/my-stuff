@@ -24,6 +24,7 @@ export type ItemDetail = ItemSummary & {
   source_url: string | null
   image_url: string | null
   receipt_url: string | null
+  source_photo_url: string | null
   ai_suggested_fields: string[]
   updated_at: string
 }
@@ -40,9 +41,9 @@ export type Suggestion = {
   currency: string | null
   purchase_date: string | null
   quantity: number
-  source_url: string | null
   /** Null when nothing said either way, which is not the same as "bought new". */
   second_hand: boolean | null
+  source_url: string | null
   image_url: string | null
   suggested_fields: string[]
 }
@@ -183,6 +184,13 @@ export const api = {
   },
   deleteItem: (id: string) =>
     request<void>(`/api/items/${id}`, { method: 'DELETE' }).finally(invalidateTaxonomy),
+
+  /** Offers a product photo made from the item's own photograph. Changes nothing until
+   *  accepted, so a preview can be thrown away by ignoring it. */
+  makeProductPhoto: (id: string) =>
+    request<{ preview_url: string }>(`/api/items/${id}/product-photo`, { method: 'POST' }),
+  acceptProductPhoto: (id: string) =>
+    request<ItemDetail>(`/api/items/${id}/product-photo/accept`, { method: 'POST' }),
 
   boards: () => request<BoardSummary[]>('/api/boards'),
   board: (id: string) => request<BoardDetail>(`/api/boards/${id}`),

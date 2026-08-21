@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Gemini 3.x is not served from any europe-* region; "global" is required. See research D1.
     gemini_location: str = "global"
     gemini_model: str = "gemini-3.1-flash-lite"
+    # Image generation is a different model to extraction, served from the same "global"
+    # location. Observed at about 15 seconds for one garment on a cluttered rail.
+    gemini_image_model: str = "gemini-3.1-flash-image"
+    product_photo_timeout_seconds: float = 60.0
     extract_timeout_seconds: float = 8.0
     # Searching the web takes longer than answering from the prompt alone.
     find_page_timeout_seconds: float = 20.0

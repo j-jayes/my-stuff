@@ -13,6 +13,8 @@ export default function ItemDetail() {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -42,6 +44,35 @@ export default function ItemDetail() {
     }
   }
 
+  async function makeProductPhoto() {
+    if (!id) return
+    setGenerating(true)
+    setError(null)
+    try {
+      setPreview((await api.makeProductPhoto(id)).preview_url)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not make a photo of that.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function acceptProductPhoto() {
+    if (!id) return
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await api.acceptProductPhoto(id)
+      setItem(updated)
+      setValues(valuesFromItem(updated))
+      setPreview(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not use that photo.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function remove() {
     if (!id || !confirm('Delete this item for good?')) return
     await api.deleteItem(id)
@@ -63,6 +94,7 @@ export default function ItemDetail() {
     ['Brand', item.brand],
     ['How many', item.quantity > 1 ? String(item.quantity) : null],
     ['Purchased', item.purchase_date],
+    ['Second hand', item.second_hand ? 'Yes' : null],
     ['Serial number', item.serial_number],
   ]
   // With more than one, the headline figure is what the set is worth and the unit price is
@@ -81,6 +113,38 @@ export default function ItemDetail() {
       <div className="detail">
         <div className="detail-media stack">
           {item.image_url && <img src={item.image_url} alt={item.name} />}
+
+          {item.image_url && !editing && (
+            <div>
+              {preview ? (
+                <>
+                  <h2 className="section-head">Product photo</h2>
+                  <img src={preview} alt={`Generated product photo of ${item.name}`} />
+                  <div className="row" style={{ marginTop: 'var(--s-3)' }}>
+                    <button className="primary" onClick={acceptProductPhoto} disabled={busy}>
+                      {busy ? <span className="spinner" /> : 'Use this photo'}
+                    </button>
+                    <button onClick={() => setPreview(null)} disabled={busy}>
+                      Discard
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button className="full" onClick={makeProductPhoto} disabled={generating}>
+                  {generating ? <span className="spinner" /> : 'Make product photo'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {item.source_photo_url && (
+            <p className="muted">
+              <a href={item.source_photo_url} target="_blank" rel="noreferrer">
+                The photograph this was made from ↗
+              </a>
+            </p>
+          )}
+
           {item.receipt_url && (
             <div>
               <h2 className="section-head">Receipt</h2>
@@ -94,7 +158,6 @@ export default function ItemDetail() {
             <>
               <h1>Edit</h1>
               {error && <p className="error">{error}</p>}
-    ['Second hand', item.second_hand ? 'Yes' : null],
               <div style={{ marginTop: 'var(--s-5)' }}>
                 <ItemForm
                   values={values}

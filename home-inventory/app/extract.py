@@ -138,6 +138,57 @@ class ExtractionUnavailable(Exception):
     """The model could not be reached or did not answer. The caller falls back to a blank form."""
 
 
+# Naming the object is the whole trick. A photograph of a wardrobe rail holds four garments and
+# a belt; asked for "a product photo of this" the model picks one, and it picks the wrong one.
+# The item's own name is already the owner's answer to which thing this is a photo of.
+PRODUCT_PHOTO_PROMPT = (
+    "This is the owner's own photograph of something they own. Produce a product photograph "
+    "of the {name} in it, and nothing else: that single object alone on a plain white "
+    "background, front on, evenly lit, no hanger, no rail, no hands, no other objects, no "
+    "text or watermark. Keep its exact colour, pattern, material, proportions and any visible "
+    "wear — this is a photograph of one specific thing somebody owns, not a new design."
+)
+
+
+def generate_product_photo(
+    settings: Settings, *, image: bytes, content_type: str, name: str
+) -> tuple[bytes, str]:
+    """A catalogue-style photograph of the named object, from a photograph of it in situ.
+
+    Returns the image and its content type. Raises rather than returning anything empty: a
+    refusal comes back as a normal response carrying only prose, and treating that as success
+    would write a nothing over the owner's photograph.
+    """
+    from google.genai import types
+
+    try:
+        response = _client(settings.gcp_project, settings.gemini_location).models.generate_content(
+            model=settings.gemini_image_model,
+            contents=[
+                types.Part.from_bytes(data=image, mime_type=content_type or "image/jpeg"),
+                PRODUCT_PHOTO_PROMPT.format(name=name),
+            ],
+            config=types.GenerateContentConfig(
+                response_modalities=["TEXT", "IMAGE"],
+                http_options=types.HttpOptions(
+                    timeout=int(settings.product_photo_timeout_seconds * 1000)
+                ),
+            ),
+        )
+    except Exception as exc:
+        logger.warning("Gemini could not make a product photo: %s", exc)
+        raise ExtractionUnavailable(str(exc)) from exc
+
+    for candidate in response.candidates or []:
+        for part in getattr(candidate.content, "parts", None) or []:
+            inline = getattr(part, "inline_data", None)
+            if inline and inline.data:
+                return inline.data, inline.mime_type or "image/png"
+
+    logger.info("The image model answered without an image")
+    raise ExtractionUnavailable("The model did not return an image")
+
+
 def resolve_name(names: list[str], answer: str | None) -> str | None:
     """Match a name the model returned against the list it was offered, ignoring case.
 

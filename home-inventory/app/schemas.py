@@ -99,6 +99,8 @@ class ItemDetail(ItemSummary):
     source_url: str | None
     image_url: str | None
     receipt_url: str | None
+    # Set only where a generated product photo took the place of a photograph.
+    source_photo_url: str | None
     ai_suggested_fields: list[str]
     updated_at: str
 
@@ -126,11 +128,11 @@ class SuggestionResponse(BaseModel):
     currency: str | None = None
     purchase_date: str | None = None
     quantity: int = 1
-    # Where the answer came from, for the client to keep alongside the item.
-    source_url: str | None = None
     # Null rather than false when the model was told nothing: silence is not evidence that a
     # thing was bought new.
     second_hand: bool | None = None
+    # Where the answer came from, for the client to keep alongside the item.
+    source_url: str | None = None
     image_url: str | None = None
     # Which of the above the model supplied, so the form can mark them as guesses.
     suggested_fields: list[str] = Field(default_factory=list)

@@ -13,11 +13,12 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import require_session
 from app.config import Settings, get_settings
 from app.db import get_session, save_snapshot
-from app.deps import get_storage, to_detail, to_summary
+from app.deps import get_storage, media_url, to_detail, to_summary
 from app.extract import (
     ExtractionUnavailable,
     _to_minor,
     find_product_pages,
+    generate_product_photo,
     resolve_name,
     suggest_item,
 )
@@ -42,7 +43,7 @@ from app.scrape import (
     fetch_page_metadata,
     names_a_variant,
 )
-from app.storage import MediaStorage
+from app.storage import MediaStorage, ObjectNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -549,6 +550,88 @@ async def update_item(
     return to_detail(item)
 
 
+def _preview_key(item_id: str) -> str:
+    """One preview per item, at a fixed key. Deliberately extensionless: storage keeps the
+    content type beside the object, so the key does not have to know what came back, and a
+    key that never varies is one that can always be found again to delete."""
+    return f"items/{item_id}/product-preview"
+
+
+@router.post("/{item_id}/product-photo")
+def make_product_photo(
+    item_id: str,
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    storage: MediaStorage = Depends(get_storage),
+) -> dict[str, str]:
+    """Offer a product photo made from the item's own photograph.
+
+    Writes the proposal to storage and nothing to the database: until the owner accepts it,
+    the item still has the photograph they took.
+    """
+    item = session.get(Item, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such item")
+    if not item.image_key:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "There is no photograph to work from")
+
+    stream, content_type, _ = storage.open(item.image_key)
+    with stream:
+        original = stream.read()
+
+    try:
+        data, mime = generate_product_photo(
+            settings, image=original, content_type=content_type, name=item.name
+        )
+    except ExtractionUnavailable as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not make a photo: {exc}")
+
+    key = _preview_key(item.id)
+    storage.put(key, data, mime)
+    return {"preview_url": media_url(key)}
+
+
+@router.post("/{item_id}/product-photo/accept", response_model=ItemDetail)
+def accept_product_photo(
+    item_id: str,
+    session: Session = Depends(get_session),
+    storage: MediaStorage = Depends(get_storage),
+) -> ItemDetail:
+    """Make the generated photo the item's picture, keeping the photograph it was made from."""
+    item = session.get(Item, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such item")
+
+    key = _preview_key(item.id)
+    try:
+        stream, mime, _ = storage.open(key)
+    except ObjectNotFound:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Nothing to accept — generate one first")
+    with stream:
+        generated = stream.read()
+
+    previous_image, previous_thumb = item.image_key, item.thumb_key
+    if previous_image:
+        # Move the photograph aside before anything overwrites it. A second accept overwrites
+        # this in turn: one photograph back is the history worth keeping, not every attempt.
+        original, original_type, _ = storage.open(previous_image)
+        with original:
+            source_key = f"items/{item.id}/source.{extension_for(original_type)}"
+            storage.put(source_key, original.read(), original_type)
+        item.source_image_key = source_key
+
+    # Written before the old keys are dropped: an unreadable answer leaves the item as it was.
+    item.image_key, item.thumb_key = _store_image(storage, item.id, generated, mime)
+    for old in (previous_image, previous_thumb):
+        if old and old not in (item.image_key, item.thumb_key, item.source_image_key):
+            storage.delete(old)
+    storage.delete(key)
+
+    session.commit()
+    save_snapshot()
+    return to_detail(item)
+
+
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_item(
     item_id: str,
@@ -558,7 +641,14 @@ def delete_item(
     item = session.get(Item, item_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such item")
-    for key in (item.image_key, item.thumb_key, item.receipt_key):
+    for key in (
+        item.image_key,
+        item.thumb_key,
+        item.receipt_key,
+        item.source_image_key,
+        # Always deletable because the key is fixed, whether or not one was ever generated.
+        _preview_key(item.id),
+    ):
         if key:
             storage.delete(key)
     session.delete(item)

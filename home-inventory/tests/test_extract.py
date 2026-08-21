@@ -5,13 +5,17 @@ excludes. The rest use a stub client, because the interesting logic is the assem
 request and the conversion of the answer — not the model.
 """
 
+import io
+
 import pytest
 
 from app.config import Settings
 from app.extract import (
+    ExtractionUnavailable,
     ItemSuggestion,
     _to_minor,
     find_product_pages,
+    generate_product_photo,
     resolve_name,
     suggest_item,
 )
@@ -288,3 +292,108 @@ def test_a_real_search_returns_real_sources():
     assert all(url.startswith("https://") for url in found)
     # Sources come back as redirects through Google, not as the shop's own address.
     assert any("vertexaisearch" in url for url in found)
+
+
+class ImageStubModels:
+    """Answers the way the image model does: parts, not text, and the bytes inline."""
+
+    def __init__(self, parts) -> None:
+        self.parts = parts
+        self.calls: list[dict] = []
+
+    def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+        content = type("Content", (), {"parts": self.parts})()
+        candidate = type("Candidate", (), {"content": content})()
+        return type("Response", (), {"candidates": [candidate]})()
+
+
+def _part(text=None, data=None, mime="image/png"):
+    inline = type("Inline", (), {"data": data, "mime_type": mime})() if data else None
+    return type("Part", (), {"text": text, "inline_data": inline})()
+
+
+def image_stub(monkeypatch, *parts):
+    client = type("Client", (), {"models": ImageStubModels(list(parts))})()
+    monkeypatch.setattr("app.extract._client", lambda *a, **k: client)
+    return client
+
+
+def test_a_product_photo_comes_back_as_bytes(monkeypatch):
+    client = image_stub(monkeypatch, _part(text="Here you go."), _part(data=b"PNG-bytes"))
+
+    data, mime = generate_product_photo(
+        Settings(), image=b"a photo", content_type="image/jpeg", name="ochre jacket"
+    )
+
+    assert (data, mime) == (b"PNG-bytes", "image/png")
+    call = client.models.calls[0]
+    assert call["model"] == Settings().gemini_image_model
+    assert call["config"].response_modalities == ["TEXT", "IMAGE"]
+
+
+def test_the_item_is_named_so_the_right_one_is_lifted_out(monkeypatch):
+    """A photo of a wardrobe rail holds four garments. Without saying which one this is a
+    photo of, the model picks one — and it picks the wrong one."""
+    client = image_stub(monkeypatch, _part(data=b"PNG-bytes"))
+
+    generate_product_photo(
+        Settings(), image=b"a photo", content_type="image/jpeg", name="Oxford shirt, blue"
+    )
+
+    sent = " ".join(str(part) for part in client.models.calls[0]["contents"])
+    assert "Oxford shirt, blue" in sent
+
+
+def test_an_answer_with_no_image_in_it_is_a_failure(monkeypatch):
+    """A refusal comes back as prose, with a 200 and no image. Treating that as success would
+    store an empty file over the owner's photograph."""
+    image_stub(monkeypatch, _part(text="I can't help with that."))
+
+    with pytest.raises(ExtractionUnavailable):
+        generate_product_photo(
+            Settings(), image=b"a photo", content_type="image/jpeg", name="a shirt"
+        )
+
+
+def test_a_model_that_cannot_be_reached_is_a_failure(monkeypatch):
+    client = image_stub(monkeypatch, _part(data=b"PNG-bytes"))
+
+    def boom(**kwargs):
+        raise RuntimeError("no quota")
+
+    monkeypatch.setattr(client.models, "generate_content", boom)
+
+    with pytest.raises(ExtractionUnavailable):
+        generate_product_photo(
+            Settings(), image=b"a photo", content_type="image/jpeg", name="a shirt"
+        )
+
+
+@pytest.mark.integration
+def test_a_real_photograph_becomes_a_real_product_photo():
+    """Hits Vertex for real. The photograph is a wardrobe rail holding four garments, which is
+    the case that matters: the model has to lift out the one the item is about and leave the
+    rest, not compose something new from all of them."""
+    import httpx
+    from PIL import Image
+
+    source = httpx.get(
+        "https://commons.wikimedia.org/wiki/Special:FilePath/Wardrobe%20(Unsplash).jpg?width=1200",
+        headers={"User-Agent": "my-stuff-inventory-tests/1.0"},
+        follow_redirects=True,
+    )
+    source.raise_for_status()
+
+    data, mime = generate_product_photo(
+        Settings(),
+        image=source.content,
+        content_type="image/jpeg",
+        name="ochre cotton jacket",
+    )
+
+    assert mime.startswith("image/")
+    # A real, decodable image rather than a plausible blob of bytes.
+    image = Image.open(io.BytesIO(data))
+    image.verify()
+    assert min(image.size) > 200

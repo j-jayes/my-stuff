@@ -18,6 +18,7 @@ services:
       GCP_PROJECT: ${GCP_PROJECT:-my-stuff-inventory}
       GEMINI_LOCATION: global
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-3.1-flash-image}
       GOOGLE_APPLICATION_CREDENTIALS: /gcp/application_default_credentials.json
     volumes:
       # Survives a container rebuild, so local data is not lost every time the image changes.

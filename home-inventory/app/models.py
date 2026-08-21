@@ -90,6 +90,8 @@ class Item(Base):
     image_key: Mapped[str | None] = mapped_column(String)
     thumb_key: Mapped[str | None] = mapped_column(String)
     receipt_key: Mapped[str | None] = mapped_column(String)
+    # The photograph the owner took, kept when a generated product photo replaces it above.
+    source_image_key: Mapped[str | None] = mapped_column(String)
 
     room_id: Mapped[str | None] = mapped_column(ForeignKey("rooms.id", ondelete="RESTRICT"))
     category_id: Mapped[str | None] = mapped_column(
