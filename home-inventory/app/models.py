@@ -146,7 +146,7 @@ class BoardItem(Base):
     item: Mapped[Item] = relationship(back_populates="placements")
 
 
-SEED_ROOMS = ["Kitchen", "Bedroom", "Lounge", "Bathroom", "Storage Room"]
+SEED_ROOMS = ["Kitchen", "Bedroom", "Lounge", "Bathroom", "Storage Room", "Closet"]
 SEED_CATEGORIES = [
     "Furniture",
     "Lighting",
@@ -195,5 +195,16 @@ SEED_SUBCATEGORIES = {
         "Bathroom Storage",
         "Bathroom Fittings",
         "Grooming & Personal Care",
+    ],
+    # Shelved by the part of an outfit each fills, not by garment type. Dressing means picking
+    # a top, then a bottom, then shoes — a shirt and a t-shirt answer the same question, so
+    # splitting them would put one decision across two shelves. What kind of top it is lives
+    # in the name, where it is read.
+    "Clothing & Accessories": [
+        "Tops",
+        "Bottoms",
+        "Outerwear",
+        "Shoes",
+        "Accessories",
     ],
 }

@@ -188,6 +188,66 @@ def test_categories_added_to_the_seed_list_reach_an_existing_database(settings):
     assert "cat-2" in parents  # shelves hang off the Kitchenware that was already there
 
 
+def test_the_closet_and_its_shelves_reach_an_existing_database(settings):
+    """A room added to the seed list has the same problem a category does: the rooms table of
+    every real database is already populated, so application seeding never fires again."""
+    config = db._alembic_config()
+    engine = sa.create_engine(f"sqlite:///{settings.db_path}")
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0005_item_second_hand")
+        for order, name in enumerate(["Kitchen", "Bedroom", "Lounge", "Bathroom", "Storage Room"]):
+            connection.execute(
+                sa.text(
+                    "INSERT INTO rooms (id, name, sort_order, created_at)"
+                    f" VALUES ('room-{order}', :name, {order}, '2026-01-01T00:00:00Z')"
+                ),
+                {"name": name},
+            )
+        connection.execute(
+            sa.text(
+                "INSERT INTO categories (id, name, sort_order, created_at)"
+                " VALUES ('cat-clothing', 'Clothing & Accessories', 0, '2026-01-01T00:00:00Z')"
+            )
+        )
+    engine.dispose()
+
+    db.reset_for_tests()
+    db.init(settings)
+    db.reset_for_tests()
+
+    engine = sa.create_engine(f"sqlite:///{settings.db_path}")
+    with engine.connect() as connection:
+        rooms = connection.execute(sa.text("SELECT name FROM rooms")).scalars().all()
+        shelves = connection.execute(
+            sa.text("SELECT name FROM categories WHERE parent_id='cat-clothing'")
+        ).scalars().all()
+    engine.dispose()
+
+    assert rooms.count("Closet") == 1
+    # The five it started with are still there, once each.
+    assert rooms.count("Bedroom") == 1
+    # Shelves hang off the Clothing & Accessories that was already there, not a second copy.
+    assert set(shelves) == {"Tops", "Bottoms", "Shoes", "Outerwear", "Accessories"}
+
+
+def test_a_deleted_seed_room_is_not_resurrected(settings):
+    """Same promise the categories make: removing a room you do not have is permanent."""
+    db.reset_for_tests()
+    db.init(settings)
+
+    with db._session_factory() as session:
+        victim = session.scalar(sa.select(db.Room).where(db.Room.name == "Closet"))
+        session.delete(victim)
+        session.commit()
+    db.reset_for_tests()
+
+    db.init(settings)
+    with db._session_factory() as session:
+        assert session.scalar(sa.select(db.Room).where(db.Room.name == "Closet")) is None
+    db.reset_for_tests()
+
+
 def test_a_deleted_seed_category_is_not_resurrected(settings):
     """Topping up on every boot would put back a category the owner deliberately removed.
     Doing it in a migration means it happens once."""

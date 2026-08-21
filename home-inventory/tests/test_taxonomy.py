@@ -38,13 +38,33 @@ def test_kitchenware_is_seeded_with_its_shelves(signed_in):
 
 def test_only_the_categories_that_need_shelves_have_them(signed_in):
     by_name = entries(signed_in)
-    with_shelves = {"Kitchenware", "Bedding & Linen", "Bathroom & Grooming"}
+    with_shelves = {
+        "Kitchenware",
+        "Bedding & Linen",
+        "Bathroom & Grooming",
+        "Clothing & Accessories",
+    }
 
     for name in ("Furniture", "Lighting", "Electronics", "Tools", "Decor", "Miscellaneous"):
         assert by_name[name]["parent_id"] is None, name
 
     parents = {c["parent_id"] for c in by_name.values() if c["parent_id"]}
     assert parents == {by_name[name]["id"] for name in with_shelves}
+
+
+def test_clothing_is_shelved_by_what_an_outfit_is_made_of(signed_in):
+    """Not by garment type. Picking an outfit means choosing a top, then a bottom, then shoes;
+    a shirt and a t-shirt answer the same question and belong on the same shelf."""
+    by_name = entries(signed_in)
+    clothing = by_name["Clothing & Accessories"]
+
+    assert {name for name, c in by_name.items() if c["parent_id"] == clothing["id"]} == {
+        "Tops",
+        "Bottoms",
+        "Shoes",
+        "Outerwear",
+        "Accessories",
+    }
 
 
 def test_towels_have_exactly_one_home(signed_in):
