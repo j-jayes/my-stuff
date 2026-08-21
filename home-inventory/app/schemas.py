@@ -134,6 +134,9 @@ class SuggestionResponse(BaseModel):
     # Where the answer came from, for the client to keep alongside the item.
     source_url: str | None = None
     image_url: str | None = None
+    # Every photograph the page offered, so the owner can pick the one that shows the thing
+    # rather than a model wearing it. image_url is whichever of these comes first.
+    image_urls: list[str] = Field(default_factory=list)
     # Which of the above the model supplied, so the form can mark them as guesses.
     suggested_fields: list[str] = Field(default_factory=list)
 

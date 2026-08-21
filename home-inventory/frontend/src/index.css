@@ -801,6 +801,13 @@ label > span {
   opacity: 0.3;
 }
 
+/* The shop photograph currently chosen, in the strip offered while adding an item. */
+.tray img.chosen {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+  border-color: var(--accent-strong);
+}
+
 /* ---- login ----------------------------------------------------------------------------- */
 
 .login {

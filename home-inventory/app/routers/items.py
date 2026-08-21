@@ -318,6 +318,7 @@ async def suggest(
                 name=page.title or "",
                 source_url=url,
                 image_url=page.image_url,
+                image_urls=page.image_urls,
                 suggested_fields=["name"] if page.title else [],
             )
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not work that out: {exc}")
@@ -358,6 +359,7 @@ async def suggest(
         second_hand=suggestion.second_hand,
         source_url=url,
         image_url=page.image_url if page else None,
+        image_urls=page.image_urls if page else [],
         suggested_fields=[field for field, value in filled.items() if value],
     )
 

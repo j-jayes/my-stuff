@@ -20,6 +20,9 @@ export default function AddItem() {
   const [image, setImage] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null)
+  // Every photograph the shop's page offered. A garment is usually shown on a model first and
+  // flat on white somewhere further down, and only one of those is worth keeping.
+  const [choices, setChoices] = useState<string[]>([])
   const [sourceUrl, setSourceUrl] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<Blob | null>(null)
   const [link, setLink] = useState('')
@@ -41,6 +44,8 @@ export default function AddItem() {
         setSourceImageUrl(suggestion.image_url)
         if (!input.image) setPreviewUrl(suggestion.image_url)
       }
+      // Only worth offering when the owner has not supplied a photograph of their own.
+      setChoices(input.image ? [] : suggestion.image_urls)
       setValues((current) => ({
         ...current,
         name: suggestion.name || current.name,
@@ -202,6 +207,27 @@ export default function AddItem() {
       <div className="compose" style={{ marginTop: 'var(--s-5)' }}>
         <div className="stack">
           {previewUrl && <img src={previewUrl} alt="" className="preview" />}
+
+          {choices.length > 1 && (
+            <div>
+              <span className="eyebrow">Photo from the shop</span>
+              <div className="tray">
+                {choices.map((url) => (
+                  <img
+                    key={url}
+                    src={url}
+                    alt=""
+                    title="Use this photo"
+                    onClick={() => {
+                      setPreviewUrl(url)
+                      setSourceImageUrl(url)
+                    }}
+                    className={url === sourceImageUrl ? 'chosen' : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <label>
             <span>Receipt or invoice photo (optional)</span>
             <input

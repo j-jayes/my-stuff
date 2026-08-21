@@ -498,3 +498,40 @@ def test_a_shade_counts_as_the_colour(signed_in, monkeypatch):
     ).json()
 
     assert body["image_url"] == "https://cdn.example.com/amber.jpg"
+
+
+PAGE_WITH_SEVERAL = PageMetadata(
+    title="Oxford shirt",
+    image_url="https://cdn.example.com/model.jpg",
+    image_urls=[
+        "https://cdn.example.com/model.jpg",
+        "https://cdn.example.com/flat-on-white.jpg",
+    ],
+    digest="og:title: Oxford shirt",
+)
+
+
+def test_every_photograph_the_page_offered_is_passed_on(signed_in, monkeypatch):
+    """Which of a shop's photographs belongs in an inventory is a matter of taste — a shirt on
+    a model tells you least about the shirt — so the form is given all of them to offer."""
+
+    async def fake_fetch(url, timeout):
+        return PAGE_WITH_SEVERAL
+
+    monkeypatch.setattr("app.routers.items.fetch_page_metadata", fake_fetch)
+    answer(monkeypatch)
+
+    body = signed_in.post("/api/items/suggest", data={"url": "https://example.com/p/1"}).json()
+
+    assert body["image_urls"] == PAGE_WITH_SEVERAL.image_urls
+    assert body["image_url"] == "https://cdn.example.com/model.jpg"
+
+
+def test_a_photograph_from_the_owner_has_no_alternatives_to_offer(signed_in, photo, monkeypatch):
+    answer(monkeypatch)
+
+    body = signed_in.post(
+        "/api/items/suggest", files={"image": ("p.png", photo, "image/png")}
+    ).json()
+
+    assert body["image_urls"] == []

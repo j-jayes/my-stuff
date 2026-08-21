@@ -45,6 +45,8 @@ export type Suggestion = {
   second_hand: boolean | null
   source_url: string | null
   image_url: string | null
+  /** Every photograph the page offered; image_url is the first of them. */
+  image_urls: string[]
   suggested_fields: string[]
 }
 

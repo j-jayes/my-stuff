@@ -170,6 +170,41 @@ def test_the_product_photograph_beats_the_sharing_card():
     assert extract_metadata(html, "https://e.com/").image_url == "https://cdn.example.com/ld.jpg"
 
 
+def test_every_photograph_the_page_offers_comes_back():
+    """A shop shows a garment several ways and only one of them is the picture worth keeping.
+    Asket lists four shots on a model and one flat on white, and which is wanted is a matter of
+    taste, so the owner is offered all of them rather than guessed at.
+    """
+    html = """
+    <html><head>
+      <meta property="og:image" content="https://cdn.example.com/card.jpg">
+      <script type="application/ld+json">{"@type":"Product","image":[
+        "https://cdn.example.com/model-1.jpg",
+        "https://cdn.example.com/model-2.jpg",
+        "https://cdn.example.com/flat.jpg"]}</script>
+    </head></html>
+    """
+    found = extract_metadata(html, "https://e.com/")
+
+    assert found.image_urls == [
+        "https://cdn.example.com/model-1.jpg",
+        "https://cdn.example.com/model-2.jpg",
+        "https://cdn.example.com/flat.jpg",
+    ]
+    # The first is still what gets used unless the owner says otherwise.
+    assert found.image_url == "https://cdn.example.com/model-1.jpg"
+
+
+def test_a_photograph_that_points_somewhere_internal_is_dropped_from_the_list():
+    """Each one is fetched if chosen, so each one has to survive the same check as the first."""
+    html = """
+    <html><head><script type="application/ld+json">{"@type":"Product","image":[
+      "http://169.254.169.254/x.jpg",
+      "https://cdn.example.com/real.jpg"]}</script></head></html>
+    """
+    assert extract_metadata(html, "https://e.com/").image_urls == ["https://cdn.example.com/real.jpg"]
+
+
 def test_the_sharing_card_is_used_when_there_is_no_product_photograph():
     """Most pages carry no schema.org image at all, and og:image is all there is."""
     html = """

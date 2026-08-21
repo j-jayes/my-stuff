@@ -5,7 +5,7 @@ import json
 import re
 import socket
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -129,6 +129,9 @@ class BlockedUrl(Exception):
 class PageMetadata:
     title: str | None
     image_url: str | None
+    # Every photograph the page offered, first one first. A shop shows a garment on a model and
+    # again flat on white, and which of those belongs in an inventory is the owner's call.
+    image_urls: list[str] = field(default_factory=list)
     # The page reduced to something worth putting in a prompt. See page_digest.
     digest: str = ""
     # Where the fetch actually ended up. Search results arrive as redirects through
@@ -191,14 +194,16 @@ def _safe_image_url(candidate: str | None, page_url: str) -> str | None:
     return absolute
 
 
-def _structured_image(soup: BeautifulSoup) -> str | None:
-    """The product photograph out of a schema.org block.
+def _structured_images(soup: BeautifulSoup) -> list[str]:
+    """Every product photograph a schema.org block names, in the order it names them.
 
     Preferred over og:image, which is a sharing card: IKEA serves
     `<meta property="og:image" content="">` on some pages, and Asket serves the product cropped
-    to a 1200x630 banner. This names the photograph itself.
-    `image` may be a bare URL, a list, or ImageObjects; take the first thing that looks usable.
+    to a 1200x630 banner. This names the photographs themselves — and there is usually more
+    than one, because a shop shoots a garment on a model and again flat on a white backdrop.
+    `image` may be a bare URL, a list, or ImageObjects; take everything that looks usable.
     """
+    found: list[str] = []
     for script in soup.find_all("script", type="application/ld+json"):
         if not script.string:
             continue
@@ -212,10 +217,10 @@ def _structured_image(soup: BeautifulSoup) -> str | None:
             candidates = block.get("image")
             for candidate in candidates if isinstance(candidates, list) else [candidates]:
                 if isinstance(candidate, str) and candidate.strip():
-                    return candidate
-                if isinstance(candidate, dict) and candidate.get("contentUrl"):
-                    return candidate["contentUrl"]
-    return None
+                    found.append(candidate)
+                elif isinstance(candidate, dict) and candidate.get("contentUrl"):
+                    found.append(candidate["contentUrl"])
+    return list(dict.fromkeys(found))
 
 
 def _declares_a_product(soup: BeautifulSoup) -> bool:
@@ -254,14 +259,19 @@ def extract_metadata(html: str, page_url: str) -> PageMetadata:
     if not title and soup.title and soup.title.string:
         title = soup.title.string.strip()
 
-    # The schema.org photograph first, because og:image is the sharing card and shops crop it
+    # The schema.org photographs first, because og:image is the sharing card and shops crop it
     # to a banner: Asket's is the same shirt forced to 1200x630, which is a strip across the
     # middle with no collar and no hem. Only the meta tags are left when there is no such block.
-    image = _structured_image(soup) or meta(property="og:image") or meta(name="twitter:image")
+    candidates = _structured_images(soup) or [
+        meta(property="og:image") or meta(name="twitter:image")
+    ]
+    # Each one is fetched if the owner picks it, so each one is checked, not just the first.
+    images = [safe for c in candidates if (safe := _safe_image_url(c, page_url))]
 
     return PageMetadata(
         title=title or None,
-        image_url=_safe_image_url(image, page_url),
+        image_url=images[0] if images else None,
+        image_urls=images,
         is_product=_declares_a_product(soup),
     )
 
