@@ -509,6 +509,9 @@ label > span {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: var(--s-5) var(--s-3);
+  /* The chip rows above supply this on a phone, but they are display:none from the sidebar
+     breakpoint up, which left the first row of tiles sitting against the search field. */
+  margin-top: var(--s-5);
 }
 
 .tile {
