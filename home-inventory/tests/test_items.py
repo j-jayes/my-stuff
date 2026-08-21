@@ -372,3 +372,33 @@ def test_an_image_url_can_be_attached_to_an_item_that_already_exists(signed_in, 
     assert updated.status_code == 200
     assert updated.json()["thumb_url"] and updated.json()["image_url"]
     assert signed_in.get(updated.json()["thumb_url"]).status_code == 200
+
+
+def test_replacing_a_photo_changes_its_address(signed_in, photo, local_storage):
+    """A replacement lands on the same key when the content type has not changed, so nothing
+    about the row changes and the ORM never touches updated_at — leaving every browser showing
+    the picture that was just replaced, for a year, because media is served immutable.
+
+    Backdated first rather than racing the one-second clock the timestamps are written with.
+    """
+    from sqlalchemy import text
+
+    from app import db
+
+    item = create(signed_in, photo=photo)
+    with db._session_factory() as session:
+        session.execute(
+            text("UPDATE items SET updated_at='2020-01-01T00:00:00Z' WHERE id=:i"),
+            {"i": item["id"]},
+        )
+        session.commit()
+    stale = signed_in.get(f"/api/items/{item['id']}").json()["thumb_url"]
+
+    updated = signed_in.patch(
+        f"/api/items/{item['id']}",
+        data={"payload": json.dumps({})},
+        files={"image": ("new.png", photo, "image/png")},
+    ).json()
+
+    assert updated["thumb_url"] != stale
+    assert signed_in.get(updated["thumb_url"]).status_code == 200

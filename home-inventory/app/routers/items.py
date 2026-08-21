@@ -26,7 +26,7 @@ from app.ikea import matches as ikea_matches
 from app.ikea import query_for as ikea_query_for
 from app.ikea import search as ikea_search
 from app.imaging import UnreadableImage, extension_for, make_thumbnail
-from app.models import Category, Item, Room, new_id
+from app.models import Category, Item, Room, new_id, utcnow
 from app.schemas import (
     BrandEntry,
     ItemDetail,
@@ -79,6 +79,16 @@ async def _read_upload(upload: UploadFile, settings: Settings) -> bytes:
             f"That image is larger than {settings.max_upload_bytes // (1024 * 1024)} MB",
         )
     return data
+
+
+def _touch(item: Item) -> None:
+    """Mark the row changed because its pictures changed.
+
+    A replacement of the same content type lands on the same key, so no column differs and the
+    ORM's onupdate never fires. Media URLs carry updated_at precisely so a new picture is
+    fetched rather than read from cache, and without this it would stay the old one.
+    """
+    item.updated_at = utcnow()
 
 
 def _store_image(
@@ -534,6 +544,7 @@ async def update_item(
         # Write the replacement before dropping the old files: if the new image turns out to be
         # unreadable, the item keeps the photo it already had.
         item.image_key, item.thumb_key = _store_image(storage, item.id, *replacement)
+        _touch(item)
         for old in previous:
             if old and old not in (item.image_key, item.thumb_key):
                 storage.delete(old)
@@ -622,6 +633,7 @@ def accept_product_photo(
 
     # Written before the old keys are dropped: an unreadable answer leaves the item as it was.
     item.image_key, item.thumb_key = _store_image(storage, item.id, generated, mime)
+    _touch(item)
     for old in (previous_image, previous_thumb):
         if old and old not in (item.image_key, item.thumb_key, item.source_image_key):
             storage.delete(old)
