@@ -71,23 +71,30 @@ class ItemSuggestion(BaseModel):
 # Asking for one product page, from the maker or a real retailer, in the owner's own market.
 # The locale preference matters: without it the answer comes back as ikea.com/us, whose prices
 # and article numbers are not the ones on the receipt.
+# Deliberately asks for prose, not for a URL. A model asked for a bare URL answers from
+# memory with something plausible and frequently wrong — four Swedish retailer URLs in a row,
+# every one a 404 — and, because it cites nothing, the response carries no sources at all.
+# Asked to describe what it found, it searches, writes an answer, and the pages it actually
+# read come back in the grounding metadata. Those are the only URLs worth having.
 FIND_PAGE_PROMPT = (
-    "Find the page on the maker's or a retailer's own website that sells exactly this "
-    "product, for someone shopping in Sweden — prefer a .se site, then .eu, then .com. "
-    "It must be the page for this one product, not a category, search or home page. "
-    "Reply with the single URL and nothing else. If you cannot find one, reply NONE."
+    "Which shops sell this exact product to someone in Sweden? Name the shops that list it "
+    "and say what each listing shows. Prefer Swedish shops and the maker's own site."
 )
-_URL_PATTERN = re.compile(r"https?://[^\s<>\"')\]]+")
+PAGE_CANDIDATES = 5
 
 
-def find_product_page(note: str, settings: Settings) -> str | None:
-    """Search the web for the product page for something the owner described in words.
+def find_product_pages(note: str, settings: Settings, limit: int = PAGE_CANDIDATES) -> list[str]:
+    """Pages a web search actually returned for something the owner described in words.
 
-    Only a candidate. The caller must fetch it and check that the page is actually about this
-    product before believing anything on it — a wrong URL does not reliably 404, it redirects
-    to a catalogue page and answers 200.
+    The URLs are taken from the response's grounding metadata — the pages the search tool
+    retrieved and the answer was written from — and never from the answer's own text. A URL
+    the model merely wrote down is a guess, and its guesses 404.
 
-    Returns None rather than raising: an item without a photo is a normal outcome.
+    They come back as redirects through vertexaisearch.cloud.google.com, so the real address
+    is only known once one has been followed. The caller does that anyway, because a page
+    still has to be checked for being about the right product.
+
+    Returns an empty list rather than raising: an item without a photo is a normal outcome.
     """
     from google.genai import types
 
@@ -105,10 +112,16 @@ def find_product_page(note: str, settings: Settings) -> str | None:
         )
     except Exception as exc:  # noqa: BLE001 - deliberately swallowed; see the docstring
         logger.info("Could not search for a product page: %s", exc)
-        return None
+        return []
 
-    match = _URL_PATTERN.search(response.text or "")
-    return match.group(0).rstrip(".,") if match else None
+    sources = []
+    for candidate in response.candidates or []:
+        metadata = getattr(candidate, "grounding_metadata", None)
+        for chunk in (getattr(metadata, "grounding_chunks", None) or []) if metadata else []:
+            web = getattr(chunk, "web", None)
+            if web and web.uri:
+                sources.append(web.uri)
+    return list(dict.fromkeys(sources))[:limit]
 
 
 class ExtractionUnavailable(Exception):

@@ -8,6 +8,7 @@ from app.scrape import (
     DIGEST_MAX_CHARS,
     MAX_REDIRECTS,
     BlockedUrl,
+    colour_conflict,
     extract_metadata,
     fetch_page_metadata,
     page_digest,
@@ -220,3 +221,54 @@ async def test_the_live_ikea_catalogue_redirect_is_recognisable():
     )
 
     assert "sortiment" in (page.title or "").lower()
+
+
+@pytest.mark.parametrize(
+    ("wanted", "offered", "conflict"),
+    [
+        ("tumbler in yellow", "Duralex Picardie marine blue", True),
+        ("FORSÅ work lamp white", "forsa-work-lamp-black-00146776", True),
+        # Amber is the yellow one and plum is the purple one. Treating a shade as a
+        # disagreement would reject the right page.
+        ("tumbler in yellow", "Duralex Picardie tumbler amber", False),
+        ("tumbler in purple", "picardie-glas-25cl-plum-duralex", False),
+        ("tumbler in yellow", "Duralex Picardie tumbler 25cl", False),
+        ("Duralex tumbler", "Duralex Picardie marine blue", False),
+        ("TERTIAL work lamp white", "tertial-work-lamp-white-70355455", False),
+        ("bed frame white", "kleppstad-bed-frame-white-vissle-beige", False),
+    ],
+)
+def test_a_named_colour_can_rule_a_page_out(wanted, offered, conflict):
+    """Only a flat disagreement counts. A page naming no colour says nothing either way, and
+    amber is not the word yellow even when it is the thing."""
+    assert colour_conflict(wanted, offered) is conflict
+
+
+def test_a_product_page_says_so_in_its_metadata():
+    html = '<html><head><meta property="og:type" content="product"></head></html>'
+
+    assert extract_metadata(html, "https://e.com/p/1").is_product is True
+
+
+def test_structured_data_also_says_so():
+    html = """
+    <html><head><script type="application/ld+json">
+      {"@context":"https://schema.org/","@type":"Product","name":"Picardie tumbler"}
+    </script></head></html>
+    """
+
+    assert extract_metadata(html, "https://e.com/p/1").is_product is True
+
+
+def test_a_brand_or_category_listing_does_not():
+    """cervera.se/varumarken/duralex lists everything Duralex makes. It shares the brand with
+    the item and nothing else, and its picture is not of the thing being catalogued."""
+    html = """
+    <html><head>
+      <meta property="og:type" content="website">
+      <meta property="og:image" content="https://cdn.example.com/brand-banner.jpg">
+      <title>Duralex - Cervera</title>
+    </head></html>
+    """
+
+    assert extract_metadata(html, "https://www.cervera.se/varumarken/duralex").is_product is False

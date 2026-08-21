@@ -11,20 +11,29 @@ from app.config import Settings
 from app.extract import (
     ItemSuggestion,
     _to_minor,
-    find_product_page,
+    find_product_pages,
     resolve_name,
     suggest_item,
 )
 
 
+def _grounded(*uris):
+    """A response shaped like a grounded one: sources in the metadata, not in the prose."""
+    web = [type("Web", (), {"uri": uri, "title": uri, "domain": uri})() for uri in uris]
+    chunks = [type("Chunk", (), {"web": w})() for w in web]
+    metadata = type("Meta", (), {"grounding_chunks": chunks})()
+    return [type("Candidate", (), {"grounding_metadata": metadata})()]
+
+
 class StubModels:
     def __init__(self, payload: str) -> None:
         self.payload = payload
+        self.candidates = _grounded()
         self.calls: list[dict] = []
 
     def generate_content(self, **kwargs):
         self.calls.append(kwargs)
-        return type("Response", (), {"text": self.payload})()
+        return type("Response", (), {"text": self.payload, "candidates": self.candidates})()
 
 
 class StubClient:
@@ -212,30 +221,39 @@ def test_the_thing_that_tells_two_items_apart_stays_in_the_name(note, expected):
     assert expected.casefold() in suggestion.name.casefold(), suggestion.name
 
 
-def test_a_product_page_is_looked_for_with_search(stub):
-    stub.models.payload = "https://www.ikea.com/se/sv/p/tertial-arbetslampa-vit-70355455/"
+def test_the_urls_come_from_the_search_results(stub):
+    """Only ever from what search actually retrieved."""
+    stub.models.candidates = _grounded(
+        "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AAA",
+        "https://vertexaisearch.cloud.google.com/grounding-api-redirect/BBB",
+        "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AAA",
+    )
 
-    found = find_product_page("IKEA TERTIAL work lamp in white", Settings())
+    found = find_product_pages("Duralex Picardie tumbler amber", Settings())
 
-    assert found == "https://www.ikea.com/se/sv/p/tertial-arbetslampa-vit-70355455/"
-    # Search has to actually be switched on, or the model is guessing URLs from memory.
+    # Deduplicated; a repeated source is not worth a second fetch.
+    assert found == [
+        "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AAA",
+        "https://vertexaisearch.cloud.google.com/grounding-api-redirect/BBB",
+    ]
+    # Search has to actually be switched on, or there is nothing to be grounded in.
     assert stub.models.calls[0]["config"].tools
 
 
-@pytest.mark.parametrize(
-    "reply",
-    ["NONE", "", "   ", "I could not find one", "ftp://example.com/x", "/relative/path"],
-)
-def test_anything_that_is_not_a_usable_url_becomes_nothing(stub, reply):
-    stub.models.payload = reply
+def test_a_url_the_model_merely_wrote_down_is_never_used(stub):
+    """The whole reason this changed. Asked for a URL the model writes a plausible one from
+    memory — four Swedish retailer URLs in a row, every one a 404. A URL is only worth having
+    if a search engine returned it."""
+    stub.models.payload = "You want https://www.cervera.se/produkt/duralex-picardie-amber"
+    stub.models.candidates = _grounded()
 
-    assert find_product_page("a thing", Settings()) is None
+    assert find_product_pages("Duralex Picardie tumbler amber", Settings()) == []
 
 
-def test_a_url_wrapped_in_chatter_is_still_found(stub):
-    stub.models.payload = "Here you go: https://example.com/p/1 — hope that helps"
+def test_finding_nothing_is_not_an_error(stub):
+    stub.models.candidates = _grounded()
 
-    assert find_product_page("a thing", Settings()) == "https://example.com/p/1"
+    assert find_product_pages("a thing that does not exist", Settings()) == []
 
 
 def test_the_search_going_wrong_is_not_an_error(stub, monkeypatch):
@@ -246,16 +264,25 @@ def test_the_search_going_wrong_is_not_an_error(stub, monkeypatch):
 
     monkeypatch.setattr(stub.models, "generate_content", boom)
 
-    assert find_product_page("a thing", Settings()) is None
+    assert find_product_pages("a thing", Settings()) == []
 
 
 @pytest.mark.integration
-def test_a_real_product_page_is_found_from_a_description():
-    """Hits Vertex and the live web. Guards the locale preference: without it the answer comes
-    back as ikea.com/us, whose prices and article numbers are not the ones on a Swedish
-    receipt."""
-    found = find_product_page("IKEA TERTIAL work lamp in white", Settings())
+def test_a_real_search_returns_real_sources():
+    """Hits Vertex and the live web. The prompt has to be one the model answers in prose:
+    asked for a bare URL it answers without citing anything and the sources come back empty,
+    which is how this came to be reading invented URLs out of the prose in the first place.
+    """
+    # The model decides for itself whether a search is worth running, and now and then it
+    # answers from memory and cites nothing. That is a real characteristic of this — the
+    # caller gets an empty list and the item goes without a photograph — so the test asks a
+    # few times rather than pretending one attempt is deterministic.
+    attempts = [
+        find_product_pages("Duralex Picardie tumbler 25cl in amber", Settings()) for _ in range(3)
+    ]
+    found = next((sources for sources in attempts if sources), [])
 
-    assert found and found.startswith("https://")
-    assert "ikea" in found.lower()
-    assert "/us/" not in found
+    assert found, "no attempt returned any sources at all"
+    assert all(url.startswith("https://") for url in found)
+    # Sources come back as redirects through Google, not as the shop's own address.
+    assert any("vertexaisearch" in url for url in found)

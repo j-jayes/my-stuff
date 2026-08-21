@@ -2,7 +2,9 @@
 
 import ipaddress
 import json
+import re
 import socket
+import unicodedata
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
@@ -24,6 +26,101 @@ JSON_LD_MAX_CHARS = 4_000
 TEXT_MAX_CHARS = 4_000
 
 
+# Plain colour words only, and deliberately no shades. "Amber" is the yellow Duralex and
+# "plum" is the purple one, so counting those as colours would have this rejecting the very
+# pages it is meant to find, while gaining nothing: a page that names no colour it recognises
+# is simply left to the word check below.
+COLOURS = frozenset(
+    {
+        "white",
+        "black",
+        "grey",
+        "gray",
+        "red",
+        "blue",
+        "green",
+        "yellow",
+        "beige",
+        "brown",
+        "pink",
+        "purple",
+        "orange",
+        "turquoise",
+        "silver",
+        "gold",
+        "oak",
+        "birch",
+        "pine",
+        "walnut",
+    }
+)
+
+
+# Shades a shop uses instead of a plain colour. They are not colours for the purpose of
+# disagreeing — amber is the yellow Duralex, plum the purple one — but they do show that a
+# page is about one particular variant rather than the plain version.
+SHADES = frozenset(
+    {
+        "amber",
+        "plum",
+        "sapphire",
+        "marine",
+        "navy",
+        "ivory",
+        "cream",
+        "charcoal",
+        "teal",
+        "olive",
+        "mustard",
+        "rose",
+        "burgundy",
+        "taupe",
+        "lilac",
+        "lila",
+        "graphite",
+        "sand",
+        "clear",
+        "smoke",
+    }
+)
+
+
+def names_a_variant(text: str) -> bool:
+    """Does this text say which version of the thing it is about?
+
+    The Duralex Le Picardie page is a genuine product page for the plain glass and names no
+    colour at all, so nothing contradicts a note asking for the purple one and its photograph
+    would have been used. If a colour was asked for, a page that names no variant whatsoever
+    is not the page.
+    """
+    return bool(_colour_words(text) or _shade_words(text))
+
+
+def _shade_words(text: str) -> set[str]:
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(c for c in folded if not unicodedata.combining(c)).casefold()
+    return set(re.findall(r"[a-z0-9]+", folded)) & SHADES
+
+
+def colour_conflict(wanted: str, offered: str) -> bool:
+    """Does one text name a variant the other rules out?
+
+    Only a colour that was actually asked for can be contradicted, and only by a colour that
+    is actually named: a page that mentions no colour is not evidence of anything either way.
+    Amber is not yellow and plum is not purple as words, so this deliberately does not demand
+    a match — it only refuses a flat disagreement.
+    """
+    asked = _colour_words(wanted)
+    got = _colour_words(offered)
+    return bool(asked and got and not (asked & got))
+
+
+def _colour_words(text: str) -> set[str]:
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(c for c in folded if not unicodedata.combining(c)).casefold()
+    return set(re.findall(r"[a-z0-9]+", folded)) & COLOURS
+
+
 class BlockedUrl(Exception):
     """The URL is not something we are willing to fetch."""
 
@@ -34,6 +131,11 @@ class PageMetadata:
     image_url: str | None
     # The page reduced to something worth putting in a prompt. See page_digest.
     digest: str = ""
+    # Where the fetch actually ended up. Search results arrive as redirects through
+    # vertexaisearch.cloud.google.com, so the address asked for is not the address read.
+    url: str = ""
+    # Whether the page says it is about one product. See _declares_a_product.
+    is_product: bool = False
 
 
 def _check_scheme_and_literal_address(url: str) -> str:
@@ -115,6 +217,31 @@ def _structured_image(soup: BeautifulSoup) -> str | None:
     return None
 
 
+def _declares_a_product(soup: BeautifulSoup) -> bool:
+    """Does the page claim to be about a single product?
+
+    A search for a Duralex tumbler happily returns cervera.se/varumarken/duralex, which lists
+    everything the brand makes: it shares the brand with the item, which is all the word check
+    needs, and its picture is a shop banner. Both of the ways a page declares itself a product
+    are standard and already parsed here, so this costs nothing extra.
+    """
+    og_type = soup.find("meta", attrs={"property": "og:type"})
+    if og_type and "product" in (og_type.get("content") or "").casefold():
+        return True
+
+    for script in soup.find_all("script", type="application/ld+json"):
+        if not script.string:
+            continue
+        try:
+            blocks = json.loads(script.string)
+        except ValueError:
+            continue
+        for block in blocks if isinstance(blocks, list) else [blocks]:
+            if isinstance(block, dict) and "product" in str(block.get("@type", "")).casefold():
+                return True
+    return False
+
+
 def extract_metadata(html: str, page_url: str) -> PageMetadata:
     soup = BeautifulSoup(html, "html.parser")
 
@@ -128,7 +255,11 @@ def extract_metadata(html: str, page_url: str) -> PageMetadata:
 
     image = meta(property="og:image") or meta(name="twitter:image") or _structured_image(soup)
 
-    return PageMetadata(title=title or None, image_url=_safe_image_url(image, page_url))
+    return PageMetadata(
+        title=title or None,
+        image_url=_safe_image_url(image, page_url),
+        is_product=_declares_a_product(soup),
+    )
 
 
 def page_digest(html: str, page_url: str) -> str:
@@ -200,6 +331,7 @@ async def fetch_page_metadata(url: str, timeout: float, transport=None) -> PageM
         html = response.text[:MAX_HTML_BYTES]
     page = extract_metadata(html, str(response.url))
     page.digest = page_digest(html, str(response.url))
+    page.url = str(response.url)
     return page
 
 

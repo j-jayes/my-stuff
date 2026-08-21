@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.scrape import colour_conflict
+
 logger = logging.getLogger(__name__)
 
 # se/en rather than se/sv: the same Swedish catalogue, prices and article numbers, but the
@@ -113,9 +115,7 @@ def matches(query: str, product: IkeaProduct) -> bool:
     if not name or _words(name) - _words(query):
         return False
 
-    asked = _words(query) & COLOURS
-    got = _words(product.url) & COLOURS
-    return not (asked and got and not (asked & got))
+    return not colour_conflict(query, product.url)
 
 
 async def search(query: str, timeout: float, locale: str = "se/en", transport=None):

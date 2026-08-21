@@ -25,7 +25,7 @@ def no_searching(monkeypatch):
     async def no_ikea(*args, **kwargs):
         return None
 
-    monkeypatch.setattr("app.routers.items.find_product_page", lambda *a, **k: None)
+    monkeypatch.setattr("app.routers.items.find_product_pages", lambda *a, **k: [])
     monkeypatch.setattr("app.routers.items.ikea_search", no_ikea)
 
 
@@ -174,12 +174,14 @@ FOUND = PageMetadata(
     title="Duralex Picardie tumbler 25 cl",
     image_url="https://cdn.example.com/tertial.jpg",
     digest="og:title: Duralex Picardie tumbler",
+    is_product=True,
 )
 # What IKEA actually serves for a product URL that does not exist: 200, and its catalogue.
 WRONG_PAGE = PageMetadata(
     title="Se hela IKEA sortimentet & alla produkter online - IKEA",
     image_url="https://cdn.example.com/some-other-thing.jpg",
     digest="og:title: Se hela IKEA sortimentet",
+    is_product=True,  # it does claim to be one; the title is what gives it away
 )
 
 
@@ -187,7 +189,7 @@ def searching(monkeypatch, page, url="https://www.ikea.com/se/sv/p/tertial-vit-7
     async def fake_fetch(target, timeout, **kwargs):
         return page
 
-    monkeypatch.setattr("app.routers.items.find_product_page", lambda *a, **k: url)
+    monkeypatch.setattr("app.routers.items.find_product_pages", lambda *a, **k: [url])
     monkeypatch.setattr("app.routers.items.fetch_page_metadata", fake_fetch)
 
 
@@ -210,7 +212,7 @@ def test_an_ikea_item_never_falls_back_to_a_web_search(signed_in, monkeypatch):
     answer(monkeypatch, name="FORSÅ work lamp")
     asked_the_model = []
     monkeypatch.setattr(
-        "app.routers.items.find_product_page", lambda *a, **k: asked_the_model.append(1)
+        "app.routers.items.find_product_pages", lambda *a, **k: asked_the_model.append(1) or []
     )
 
     body = signed_in.post("/api/items/suggest", data={"note": "IKEA FORSÅ work lamp white"}).json()
@@ -249,7 +251,9 @@ def test_no_search_happens_when_a_photo_was_supplied(signed_in, photo, monkeypat
     """The owner's own photograph of their own thing beats a stock product shot."""
     answer(monkeypatch)
     called = []
-    monkeypatch.setattr("app.routers.items.find_product_page", lambda *a, **k: called.append(1))
+    monkeypatch.setattr(
+        "app.routers.items.find_product_pages", lambda *a, **k: called.append(1) or []
+    )
 
     signed_in.post(
         "/api/items/suggest",
@@ -279,12 +283,13 @@ def test_an_ikea_item_is_looked_up_in_ikeas_own_search(signed_in, monkeypatch):
         title="TERTIAL Work lamp, white - IKEA",
         image_url="https://cdn.example.com/tertial.jpg",
         digest="og:title: TERTIAL Work lamp, white",
+        is_product=True,
     )
     asked_the_model = []
     searching(monkeypatch, tertial, url=product.url)
     monkeypatch.setattr("app.routers.items.ikea_search", fake_search)
     monkeypatch.setattr(
-        "app.routers.items.find_product_page", lambda *a, **k: asked_the_model.append(1)
+        "app.routers.items.find_product_pages", lambda *a, **k: asked_the_model.append(1) or []
     )
 
     body = signed_in.post(
@@ -312,7 +317,7 @@ def test_an_ikea_result_in_the_wrong_colour_is_not_used(signed_in, monkeypatch):
         )
 
     monkeypatch.setattr("app.routers.items.ikea_search", fake_search)
-    monkeypatch.setattr("app.routers.items.find_product_page", lambda *a, **k: None)
+    monkeypatch.setattr("app.routers.items.find_product_pages", lambda *a, **k: [])
 
     body = signed_in.post("/api/items/suggest", data={"note": "IKEA FORSÅ work lamp white"}).json()
 
@@ -328,8 +333,148 @@ def test_something_that_is_not_ikea_does_not_ask_ikea(signed_in, monkeypatch):
         asked.append(1)
 
     monkeypatch.setattr("app.routers.items.ikea_search", fake_search)
-    monkeypatch.setattr("app.routers.items.find_product_page", lambda *a, **k: None)
+    monkeypatch.setattr("app.routers.items.find_product_pages", lambda *a, **k: [])
 
     signed_in.post("/api/items/suggest", data={"note": "Duralex tumbler in yellow"})
 
     assert asked == []
+
+
+def test_the_shop_is_recorded_not_the_search_redirect(signed_in, monkeypatch):
+    """Search results arrive as redirects through Google. What belongs on the item is the
+    shop the fetch actually landed on."""
+    answer(monkeypatch, name="Picardie tumbler")
+    landed = PageMetadata(
+        title="Duralex Picardie tumbler 25 cl amber",
+        image_url="https://cdn.example.com/amber.jpg",
+        digest="og:title: Duralex Picardie tumbler",
+        url="https://www.kitchenlab.se/p/picardie-tumbler-25-cl-amber-duralex/",
+        is_product=True,
+    )
+    searching(
+        monkeypatch,
+        landed,
+        url="https://vertexaisearch.cloud.google.com/grounding-api-redirect/AAA",
+    )
+
+    body = signed_in.post(
+        "/api/items/suggest", data={"note": "Duralex Picardie tumbler amber"}
+    ).json()
+
+    assert body["source_url"] == "https://www.kitchenlab.se/p/picardie-tumbler-25-cl-amber-duralex/"
+    assert "vertexaisearch" not in (body["source_url"] or "")
+
+
+def test_a_redirect_that_lands_on_the_wrong_shop_page_is_still_refused(signed_in, monkeypatch):
+    """The check has to run against where the fetch landed, not the Google address that got
+    it there — every search redirect shares a hostname, which is no evidence about anything."""
+    answer(monkeypatch, name="Picardie tumbler")
+    landed = PageMetadata(
+        title="Kitchen textiles and tea towels — Kitchenlab",
+        image_url="https://cdn.example.com/towels.jpg",
+        digest="og:title: Kitchen textiles",
+        url="https://www.kitchenlab.se/c/kitchen-textiles/",
+        is_product=True,  # the title, not the page type, is what rules this one out
+    )
+    searching(
+        monkeypatch,
+        landed,
+        url="https://vertexaisearch.cloud.google.com/grounding-api-redirect/BBB",
+    )
+
+    body = signed_in.post(
+        "/api/items/suggest", data={"note": "Duralex Picardie tumbler amber"}
+    ).json()
+
+    assert body["image_url"] is None
+
+
+def test_a_page_about_the_same_thing_in_another_colour_is_refused(signed_in, monkeypatch):
+    """Not only IKEA does this. A blue tumbler's page shares "Duralex", "Picardie" and
+    "tumbler" with a yellow one, so words alone are not enough to tell them apart."""
+    answer(monkeypatch, name="Yellow drinking tumbler")
+    landed = PageMetadata(
+        title="Duralex Picardie tumbler 25 cl, marine blue",
+        image_url="https://cdn.example.com/blue.jpg",
+        digest="og:title: Duralex Picardie marine blue",
+        url="https://shop.example.se/duralex-picardie-marine-blue-25cl",
+        is_product=True,
+    )
+    searching(monkeypatch, landed, url="https://shop.example.se/duralex-picardie-marine-blue-25cl")
+
+    body = signed_in.post(
+        "/api/items/suggest", data={"note": "Duralex drinking tumbler in yellow"}
+    ).json()
+
+    assert body["image_url"] is None
+
+
+def test_a_brand_listing_found_by_search_is_refused(signed_in, monkeypatch):
+    """A search for a Duralex tumbler returns cervera.se/varumarken/duralex, which lists
+    everything the brand makes. It shares the brand with the item, which is all the word
+    check asks for, and its picture is a shop banner."""
+    answer(monkeypatch, name="Purple drinking tumbler")
+    listing = PageMetadata(
+        title="Duralex - Cervera",
+        image_url="https://cdn.example.com/banner.jpg",
+        digest="og:title: Duralex",
+        url="https://www.cervera.se/varumarken/duralex",
+        is_product=False,
+    )
+    searching(monkeypatch, listing, url="https://www.cervera.se/varumarken/duralex")
+
+    body = signed_in.post(
+        "/api/items/suggest", data={"note": "Duralex drinking tumbler in purple"}
+    ).json()
+
+    assert body["image_url"] is None
+
+
+def test_a_link_the_owner_pasted_is_taken_as_given(signed_in, page, monkeypatch):
+    """The product-page check is for pages found by searching. A URL the owner typed is
+    theirs, even if it is a category page they happen to want the picture from."""
+    answer(monkeypatch)
+
+    body = signed_in.post("/api/items/suggest", data={"url": "https://example.com/p/1"}).json()
+
+    assert body["image_url"] == "https://cdn.example.com/knife.jpg"
+
+
+def test_the_plain_version_is_not_the_coloured_one(signed_in, monkeypatch):
+    """duralexcanada's Le Picardie page is a real product page for the plain glass. It names
+    no colour, so there is nothing to contradict a note asking for the purple one — and its
+    photograph of a clear glass would have been used."""
+    answer(monkeypatch, name="Purple drinking tumbler")
+    plain = PageMetadata(
+        title="Duralex Le Picardie 250ml Glass - The Classic French Drinkware",
+        image_url="https://cdn.example.com/clear.png",
+        digest="og:title: Le Picardie 250ml Glass",
+        url="https://duralexcanada.ca/products/le-picardie-r-250ml-glass",
+        is_product=True,
+    )
+    searching(monkeypatch, plain, url=plain.url)
+
+    body = signed_in.post(
+        "/api/items/suggest", data={"note": "Duralex drinking tumbler in purple"}
+    ).json()
+
+    assert body["image_url"] is None
+
+
+def test_a_shade_counts_as_the_colour(signed_in, monkeypatch):
+    """Amber is the yellow Duralex. Insisting on the word "yellow" would reject it."""
+    answer(monkeypatch, name="Yellow drinking tumbler")
+    amber = PageMetadata(
+        title="Duralex Picardie Amber 8.8 oz Tumblers",
+        image_url="https://cdn.example.com/amber.jpg",
+        digest="og:title: Duralex Picardie Amber",
+        url="https://winestuff.com/products/duralex-picardie-amber-tumblers",
+        is_product=True,
+    )
+    searching(monkeypatch, amber, url=amber.url)
+
+    body = signed_in.post(
+        "/api/items/suggest", data={"note": "Duralex drinking tumbler in yellow"}
+    ).json()
+
+    assert body["image_url"] == "https://cdn.example.com/amber.jpg"

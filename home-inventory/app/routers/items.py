@@ -17,7 +17,7 @@ from app.deps import get_storage, to_detail, to_summary
 from app.extract import (
     ExtractionUnavailable,
     _to_minor,
-    find_product_page,
+    find_product_pages,
     resolve_name,
     suggest_item,
 )
@@ -34,7 +34,14 @@ from app.schemas import (
     ItemWrite,
     SuggestionResponse,
 )
-from app.scrape import BlockedUrl, PageMetadata, download_image, fetch_page_metadata
+from app.scrape import (
+    BlockedUrl,
+    PageMetadata,
+    colour_conflict,
+    download_image,
+    fetch_page_metadata,
+    names_a_variant,
+)
 from app.storage import MediaStorage
 
 logger = logging.getLogger(__name__)
@@ -209,20 +216,29 @@ async def _search_for_page(note: str, settings: Settings) -> tuple[str | None, P
             # a photograph that looks perfectly correct.
             return None, None
 
-    if not candidate:
-        candidate = find_product_page(note, settings)
-    if not candidate:
-        return None, None
-    try:
-        found = await fetch_page_metadata(candidate, settings.scrape_timeout_seconds)
-    except (BlockedUrl, httpx.HTTPError) as exc:
-        logger.info("Product page %s could not be read: %s", candidate, exc)
-        return None, None
+    candidates = [candidate] if candidate else find_product_pages(note, settings)
 
-    if not _page_is_about(note, found, candidate):
-        logger.info("Product page %s is not about %r; ignoring it", candidate, note[:60])
-        return None, None
-    return candidate, found
+    # Each is a guess, so work down them until one holds up. Most of the cost is the search
+    # that produced the list; checking another URL is one more fetch.
+    for url in candidates:
+        try:
+            found = await fetch_page_metadata(url, settings.scrape_timeout_seconds)
+        except (BlockedUrl, httpx.HTTPError) as exc:
+            logger.info("Product page %s could not be read: %s", url, exc)
+            continue
+        # Everything from here on uses where the fetch landed, not the address asked for: a
+        # search result is a redirect through Google, whose hostname says nothing about the
+        # shop and is not what should be stored as the item's source.
+        landed = found.url or url
+        if not found.is_product:
+            # Only for pages found by searching. A URL the owner pasted is theirs to choose.
+            logger.info("Page %s does not declare itself a product; ignoring it", landed)
+            continue
+        if not _page_is_about(note, found, landed):
+            logger.info("Product page %s is not about %r; ignoring it", landed, note[:60])
+            continue
+        return landed, found
+    return None, None
 
 
 @router.post("/suggest", response_model=SuggestionResponse)
@@ -364,6 +380,16 @@ def _page_is_about(note: str, page: PageMetadata, url: str) -> bool:
     its own is no evidence at all. It is the same reasoning as the duplicate check, where a
     shared brand is not enough to call two things the same.
     """
+    # A page about the same product in a different colour is the same hazard as a page about
+    # something else entirely, and it hides better.
+    described = f"{page.title or ''} {url}"
+    if colour_conflict(note, described):
+        return False
+    # And when a colour was asked for, a page that names no variant at all is the plain
+    # version of the thing, not the one being catalogued.
+    if names_a_variant(note) and not names_a_variant(described):
+        return False
+
     site_words = _distinctive_words(urlparse(url).hostname or "")
     wanted = _distinctive_words(note) - site_words
     found = _distinctive_words(page.title or "") - site_words
@@ -485,14 +511,24 @@ async def update_item(
     _validate_refs(session, body, fields_sent)
     _apply(item, body, fields_sent, session)
 
+    replacement: tuple[bytes, str] | None = None
     if image is not None:
-        data = await _read_upload(image, settings)
+        replacement = (await _read_upload(image, settings), image.content_type or "image/jpeg")
+    elif body.source_image_url and "source_image_url" in fields_sent:
+        # The same path create takes. Without this a patch carrying a found photograph
+        # answered 200 and quietly did nothing, which is the worst way to fail.
+        try:
+            replacement = await download_image(
+                body.source_image_url, settings.scrape_timeout_seconds, settings.max_upload_bytes
+            )
+        except BlockedUrl as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+
+    if replacement is not None:
         previous = (item.image_key, item.thumb_key)
         # Write the replacement before dropping the old files: if the new image turns out to be
         # unreadable, the item keeps the photo it already had.
-        item.image_key, item.thumb_key = _store_image(
-            storage, item.id, data, image.content_type or "image/jpeg"
-        )
+        item.image_key, item.thumb_key = _store_image(storage, item.id, *replacement)
         for old in previous:
             if old and old not in (item.image_key, item.thumb_key):
                 storage.delete(old)

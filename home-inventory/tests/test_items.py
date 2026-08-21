@@ -308,3 +308,31 @@ def test_renaming_a_brand_on_one_item_does_not_touch_the_others(signed_in):
     signed_in.patch(f"/api/items/{first['id']}", data={"payload": json.dumps({"brand": "Habitat"})})
 
     assert {b["name"] for b in signed_in.get("/api/items/brands").json()} == {"IKEA", "Habitat"}
+
+
+def test_an_image_url_can_be_attached_to_an_item_that_already_exists(signed_in, monkeypatch):
+    """source_image_url is part of ItemWrite and was honoured when creating an item but
+    silently ignored when patching one, so a request to attach a found photograph returned
+    200 and did nothing at all."""
+
+    async def fake_download(url, timeout, max_bytes):
+        import io
+
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new("RGB", (400, 300), (10, 90, 160)).save(buffer, "PNG")
+        return buffer.getvalue(), "image/png"
+
+    monkeypatch.setattr("app.routers.items.download_image", fake_download)
+    item = create(signed_in)
+    assert item["thumb_url"] is None
+
+    updated = signed_in.patch(
+        f"/api/items/{item['id']}",
+        data={"payload": json.dumps({"source_image_url": "https://cdn.example.com/chair.jpg"})},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["thumb_url"] and updated.json()["image_url"]
+    assert signed_in.get(updated.json()["thumb_url"]).status_code == 200
