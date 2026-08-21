@@ -3,6 +3,7 @@ import logging
 import re
 import unicodedata
 from datetime import date
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
@@ -13,7 +14,16 @@ from app.auth import require_session
 from app.config import Settings, get_settings
 from app.db import get_session, save_snapshot
 from app.deps import get_storage, to_detail, to_summary
-from app.extract import ExtractionUnavailable, _to_minor, resolve_name, suggest_item
+from app.extract import (
+    ExtractionUnavailable,
+    _to_minor,
+    find_product_page,
+    resolve_name,
+    suggest_item,
+)
+from app.ikea import matches as ikea_matches
+from app.ikea import query_for as ikea_query_for
+from app.ikea import search as ikea_search
 from app.imaging import UnreadableImage, extension_for, make_thumbnail
 from app.models import Category, Item, Room, new_id
 from app.schemas import (
@@ -173,6 +183,48 @@ def list_items(
     return ItemPage(items=[to_summary(i) for i in rows], total=total)
 
 
+async def _search_for_page(note: str, settings: Settings) -> tuple[str | None, PageMetadata | None]:
+    """Find and vet a product page for something described only in words.
+
+    Everything here is best-effort: no photograph is a perfectly good outcome, so nothing
+    raises. A page that cannot be fetched, or turns out to be about something else, is simply
+    not used.
+    """
+    import httpx
+
+    candidate = None
+    if "ikea" in note.casefold():
+        # Their own search knows the article number; a model only knows the shape of one, and
+        # an invented one redirects to the catalogue and answers 200.
+        query = ikea_query_for(note)
+        product = await ikea_search(query, settings.scrape_timeout_seconds)
+        if product and not ikea_matches(query, product):
+            logger.info("IKEA answered %s for %r; not the same product", product.url, query)
+        elif product:
+            candidate = product.url
+        if not candidate:
+            # No falling back to a web search for an IKEA product. IKEA's own catalogue is
+            # the authority on what IKEA sells, and asking a model instead is how a
+            # nickel-plated FORSÅ came back for a white one — right lamp, wrong finish, and
+            # a photograph that looks perfectly correct.
+            return None, None
+
+    if not candidate:
+        candidate = find_product_page(note, settings)
+    if not candidate:
+        return None, None
+    try:
+        found = await fetch_page_metadata(candidate, settings.scrape_timeout_seconds)
+    except (BlockedUrl, httpx.HTTPError) as exc:
+        logger.info("Product page %s could not be read: %s", candidate, exc)
+        return None, None
+
+    if not _page_is_about(note, found, candidate):
+        logger.info("Product page %s is not about %r; ignoring it", candidate, note[:60])
+        return None, None
+    return candidate, found
+
+
 @router.post("/suggest", response_model=SuggestionResponse)
 async def suggest(
     image: UploadFile | None = File(default=None),
@@ -206,6 +258,11 @@ async def suggest(
             )
         except httpx.HTTPError as exc:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not read that page: {exc}")
+    elif note and image is None:
+        # Words alone had no picture and no price. Go and look for the product page — but the
+        # owner's own photograph, when there is one, is of their actual thing and beats any
+        # stock shot, so this only runs when there is no image.
+        url, page = await _search_for_page(note, settings)
 
     data = await _read_upload(image, settings) if image is not None else None
     categories = session.scalars(select(Category).order_by(Category.sort_order)).all()
@@ -293,6 +350,24 @@ def _fold(text: str) -> str:
 def _distinctive_words(name: str) -> set[str]:
     words = re.findall(r"[\w]+", _fold(name))
     return {w for w in words if len(w) > 2 and w not in COMMON_WORDS}
+
+
+def _page_is_about(note: str, page: PageMetadata, url: str) -> bool:
+    """Is a page the model went and found actually about the thing the owner described?
+
+    "It fetched successfully" proves nothing: a product URL that does not exist redirects to
+    the retailer's catalogue and answers 200. Attaching that page's photograph to the item
+    would be worse than leaving it without one, because a wrong photograph looks right.
+
+    The check is a shared distinctive word between the note and the page title, ignoring any
+    word that is already in the hostname — every page on ikea.com says IKEA, so the brand on
+    its own is no evidence at all. It is the same reasoning as the duplicate check, where a
+    shared brand is not enough to call two things the same.
+    """
+    site_words = _distinctive_words(urlparse(url).hostname or "")
+    wanted = _distinctive_words(note) - site_words
+    found = _distinctive_words(page.title or "") - site_words
+    return bool(wanted & found)
 
 
 @router.get("/similar", response_model=list[ItemSummary])

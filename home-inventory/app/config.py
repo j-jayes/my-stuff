@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     gemini_location: str = "global"
     gemini_model: str = "gemini-3.1-flash-lite"
     extract_timeout_seconds: float = 8.0
+    # Searching the web takes longer than answering from the prompt alone.
+    find_page_timeout_seconds: float = 20.0
     scrape_timeout_seconds: float = 6.0
     max_upload_bytes: int = 20 * 1024 * 1024
 

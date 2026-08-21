@@ -1,6 +1,7 @@
 """Fetch a product page the owner pasted and pull out its image and title."""
 
 import ipaddress
+import json
 import socket
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
@@ -16,6 +17,9 @@ MAX_HTML_BYTES = 2 * 1024 * 1024
 # the three real product pages this was built against digest to 6-8k. Past that a page is
 # navigation and reviews, which cost tokens and tell the model nothing.
 DIGEST_MAX_CHARS = 12_000
+# Enough for the http->https and country-redirect hops a retail site does; short enough that a
+# loop gives up quickly.
+MAX_REDIRECTS = 5
 JSON_LD_MAX_CHARS = 4_000
 TEXT_MAX_CHARS = 4_000
 
@@ -85,6 +89,32 @@ def _safe_image_url(candidate: str | None, page_url: str) -> str | None:
     return absolute
 
 
+def _structured_image(soup: BeautifulSoup) -> str | None:
+    """The product photograph out of a schema.org block.
+
+    Worth the trouble because some pages — IKEA's among them — serve
+    `<meta property="og:image" content="">` while the JSON-LD still carries the real image.
+    `image` may be a bare URL, a list, or ImageObjects; take the first thing that looks usable.
+    """
+    for script in soup.find_all("script", type="application/ld+json"):
+        if not script.string:
+            continue
+        try:
+            blocks = json.loads(script.string)
+        except ValueError:
+            continue  # a page with broken JSON is not worth failing the whole scrape over
+        for block in blocks if isinstance(blocks, list) else [blocks]:
+            if not isinstance(block, dict):
+                continue
+            candidates = block.get("image")
+            for candidate in candidates if isinstance(candidates, list) else [candidates]:
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate
+                if isinstance(candidate, dict) and candidate.get("contentUrl"):
+                    return candidate["contentUrl"]
+    return None
+
+
 def extract_metadata(html: str, page_url: str) -> PageMetadata:
     soup = BeautifulSoup(html, "html.parser")
 
@@ -96,7 +126,7 @@ def extract_metadata(html: str, page_url: str) -> PageMetadata:
     if not title and soup.title and soup.title.string:
         title = soup.title.string.strip()
 
-    image = meta(property="og:image") or meta(name="twitter:image")
+    image = meta(property="og:image") or meta(name="twitter:image") or _structured_image(soup)
 
     return PageMetadata(title=title or None, image_url=_safe_image_url(image, page_url))
 
@@ -138,12 +168,34 @@ def page_digest(html: str, page_url: str) -> str:
     return "\n".join(parts)[:DIGEST_MAX_CHARS]
 
 
-async def fetch_page_metadata(url: str, timeout: float) -> PageMetadata:
-    validate_url(url)
-    async with httpx.AsyncClient(
-        timeout=timeout, follow_redirects=True, headers={"User-Agent": USER_AGENT}
-    ) as client:
+async def _get_following_redirects(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    """Fetch, checking every hop rather than only the first.
+
+    httpx's own follow_redirects would resolve the chain without asking us again, so a page
+    could bounce the fetch onto the metadata server after the guard had already passed. Each
+    location is validated before it is requested, so an internal address is never reached at
+    all — not merely discarded afterwards.
+    """
+    for _ in range(MAX_REDIRECTS + 1):
+        validate_url(url)
         response = await client.get(url)
+        if not response.is_redirect:
+            return response
+        location = response.headers.get("location")
+        if not location:
+            return response
+        url = str(response.url.join(location))
+    raise BlockedUrl(f"That address redirected more than {MAX_REDIRECTS} times")
+
+
+async def fetch_page_metadata(url: str, timeout: float, transport=None) -> PageMetadata:
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=False,
+        headers={"User-Agent": USER_AGENT},
+        transport=transport,
+    ) as client:
+        response = await _get_following_redirects(client, url)
         response.raise_for_status()
         html = response.text[:MAX_HTML_BYTES]
     page = extract_metadata(html, str(response.url))
@@ -153,11 +205,10 @@ async def fetch_page_metadata(url: str, timeout: float) -> PageMetadata:
 
 async def download_image(url: str, timeout: float, max_bytes: int) -> tuple[bytes, str]:
     """Fetch an image the scraper found, so the item owns its own copy."""
-    validate_url(url)
     async with httpx.AsyncClient(
-        timeout=timeout, follow_redirects=True, headers={"User-Agent": USER_AGENT}
+        timeout=timeout, follow_redirects=False, headers={"User-Agent": USER_AGENT}
     ) as client:
-        response = await client.get(url)
+        response = await _get_following_redirects(client, url)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "").split(";")[0].strip()
         if not content_type.startswith("image/"):

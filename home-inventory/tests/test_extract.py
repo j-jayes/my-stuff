@@ -8,7 +8,13 @@ request and the conversion of the answer — not the model.
 import pytest
 
 from app.config import Settings
-from app.extract import ItemSuggestion, _to_minor, resolve_name, suggest_item
+from app.extract import (
+    ItemSuggestion,
+    _to_minor,
+    find_product_page,
+    resolve_name,
+    suggest_item,
+)
 
 
 class StubModels:
@@ -184,7 +190,10 @@ def test_an_answer_is_matched_against_what_was_offered(answer, expected):
     [
         ("Duralex drinking tumbler in yellow", "yellow"),
         ("Duralex drinking tumbler in purple", "purple"),
-        ("Mungo Folly beach towel in the hermit crab colourway", "hermit crab"),
+        # "hermit" rather than "hermit crab": what matters is that this towel is tellable
+        # apart from the fiddler crab one, and either wording achieves that. Demanding the
+        # exact phrase made the test fail about a quarter of the time for no real reason.
+        ("Mungo Folly beach towel in the hermit crab colourway", "hermit"),
     ],
 )
 def test_the_thing_that_tells_two_items_apart_stays_in_the_name(note, expected):
@@ -201,3 +210,52 @@ def test_the_thing_that_tells_two_items_apart_stays_in_the_name(note, expected):
     )
 
     assert expected.casefold() in suggestion.name.casefold(), suggestion.name
+
+
+def test_a_product_page_is_looked_for_with_search(stub):
+    stub.models.payload = "https://www.ikea.com/se/sv/p/tertial-arbetslampa-vit-70355455/"
+
+    found = find_product_page("IKEA TERTIAL work lamp in white", Settings())
+
+    assert found == "https://www.ikea.com/se/sv/p/tertial-arbetslampa-vit-70355455/"
+    # Search has to actually be switched on, or the model is guessing URLs from memory.
+    assert stub.models.calls[0]["config"].tools
+
+
+@pytest.mark.parametrize(
+    "reply",
+    ["NONE", "", "   ", "I could not find one", "ftp://example.com/x", "/relative/path"],
+)
+def test_anything_that_is_not_a_usable_url_becomes_nothing(stub, reply):
+    stub.models.payload = reply
+
+    assert find_product_page("a thing", Settings()) is None
+
+
+def test_a_url_wrapped_in_chatter_is_still_found(stub):
+    stub.models.payload = "Here you go: https://example.com/p/1 — hope that helps"
+
+    assert find_product_page("a thing", Settings()) == "https://example.com/p/1"
+
+
+def test_the_search_going_wrong_is_not_an_error(stub, monkeypatch):
+    """Not finding a photo is a normal outcome; it must not fail the whole suggestion."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("Vertex is down")
+
+    monkeypatch.setattr(stub.models, "generate_content", boom)
+
+    assert find_product_page("a thing", Settings()) is None
+
+
+@pytest.mark.integration
+def test_a_real_product_page_is_found_from_a_description():
+    """Hits Vertex and the live web. Guards the locale preference: without it the answer comes
+    back as ikea.com/us, whose prices and article numbers are not the ones on a Swedish
+    receipt."""
+    found = find_product_page("IKEA TERTIAL work lamp in white", Settings())
+
+    assert found and found.startswith("https://")
+    assert "ikea" in found.lower()
+    assert "/us/" not in found

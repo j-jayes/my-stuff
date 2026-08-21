@@ -6,8 +6,10 @@ import pytest
 
 from app.scrape import (
     DIGEST_MAX_CHARS,
+    MAX_REDIRECTS,
     BlockedUrl,
     extract_metadata,
+    fetch_page_metadata,
     page_digest,
     validate_url,
 )
@@ -122,3 +124,99 @@ def test_a_page_with_nothing_useful_still_produces_a_digest():
     digest = page_digest("<html><body>Chair</body></html>", "https://example.com/")
 
     assert "Chair" in digest
+
+
+def test_an_image_is_taken_from_structured_data_when_the_meta_tag_is_empty():
+    """IKEA serves `<meta property="og:image" content="">` on some pages while the schema.org
+    block still carries the real photograph."""
+    html = """
+    <html><head>
+      <meta property="og:image" content="">
+      <script type="application/ld+json">
+        {"@type":"Product","name":"FORSÅ","image":[{"@type":"ImageObject",
+         "contentUrl":"https://cdn.example.com/forsa.jpg"}]}
+      </script>
+    </head></html>
+    """
+    assert extract_metadata(html, "https://example.com/p/1").image_url == (
+        "https://cdn.example.com/forsa.jpg"
+    )
+
+
+def test_a_plain_string_image_in_structured_data_is_understood():
+    html = """
+    <html><head><script type="application/ld+json">
+      {"@type":"Product","image":"/img/pan.jpg"}
+    </script></head></html>
+    """
+    assert extract_metadata(html, "https://example.com/p/1").image_url == (
+        "https://example.com/img/pan.jpg"
+    )
+
+
+def test_the_meta_tag_still_wins_when_it_has_a_value():
+    html = """
+    <html><head>
+      <meta property="og:image" content="https://cdn.example.com/og.jpg">
+      <script type="application/ld+json">{"@type":"Product","image":"https://cdn.example.com/ld.jpg"}</script>
+    </head></html>
+    """
+    assert extract_metadata(html, "https://e.com/").image_url == "https://cdn.example.com/og.jpg"
+
+
+def test_structured_data_that_is_not_json_is_ignored():
+    html = '<html><head><script type="application/ld+json">{ oh dear </script></head></html>'
+
+    assert extract_metadata(html, "https://e.com/").image_url is None
+
+
+def _redirector(location: str):
+    """A transport that answers every request with a redirect to a fixed location, so the
+    redirect handling can be exercised without a network. Returns the transport and the list
+    of URLs it was actually asked for."""
+    import httpx
+
+    requested: list[str] = []
+
+    def handle(request):
+        requested.append(str(request.url))
+        return httpx.Response(302, headers={"location": location})
+
+    return httpx.MockTransport(handle), requested
+
+
+@pytest.mark.asyncio
+async def test_a_redirect_towards_an_internal_address_is_refused():
+    """The SSRF guard checked the URL it was given and then let httpx follow redirects
+    unchecked, so a page could bounce the fetch onto the metadata server. That mattered little
+    when the owner typed every URL; it matters a great deal now the model supplies them.
+    """
+    transport, requested = _redirector("http://169.254.169.254/computeMetadata/v1/")
+    with pytest.raises(BlockedUrl):
+        await fetch_page_metadata("https://example.com/p/1", 5.0, transport=transport)
+
+    # The internal address must never have been requested at all.
+    assert requested == ["https://example.com/p/1"]
+
+
+@pytest.mark.asyncio
+async def test_a_redirect_loop_gives_up():
+    transport, requested = _redirector("https://example.com/p/1")
+    with pytest.raises(BlockedUrl):
+        await fetch_page_metadata("https://example.com/p/1", 5.0, transport=transport)
+
+    assert len(requested) <= MAX_REDIRECTS + 1
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_the_live_ikea_catalogue_redirect_is_recognisable():
+    """The failure that prompted the verification step: a product URL that does not exist is
+    redirected to the catalogue and answered with 200, not 404. If IKEA ever starts returning
+    a proper 404 this test fails and the check can be simplified.
+    """
+    page = await fetch_page_metadata(
+        "https://www.ikea.com/se/sv/p/forsa-arbetslampa-vit-30146860/", 20.0
+    )
+
+    assert "sortiment" in (page.title or "").lower()

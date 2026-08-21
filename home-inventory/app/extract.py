@@ -5,6 +5,7 @@ to the database (constitution principle III).
 """
 
 import logging
+import re
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 
@@ -23,9 +24,10 @@ SYSTEM_INSTRUCTION = (
     "dimensions, and any marketing suffix — 'IVAR shelving unit', never "
     "'IVAR shelving unit, with 6 shelves/pine, 89x50x226 cm - IKEA Sweden'.\n"
     "But keep whatever tells this apart from an otherwise identical thing — a colour, a "
-    "finish, a pattern, a capacity. Someone owning tumblers in three colours needs "
-    "'Yellow drinking tumbler', not three rows all called 'drinking tumbler'. Putting it in "
-    "the notes instead is not enough; the name is what is read in a list.\n"
+    "finish, a pattern, a capacity, or a named colourway even when its name is not itself a "
+    "colour word. Someone owning tumblers in three colours needs 'Yellow drinking tumbler', "
+    "not three rows all called 'drinking tumbler'. Putting it in the notes instead is not "
+    "enough; the name is what is read in a list.\n"
     "Leave brand null unless the page or note names one, or a logo is actually visible in the "
     "photo — never guess a brand from the style of an object.\n"
     "Cutlery is what goes on the table; Kitchen Knives and Kitchen Tools & Utensils are what "
@@ -64,6 +66,49 @@ class ItemSuggestion(BaseModel):
     )
     currency: str | None = Field(default=None, description="ISO-4217 code, e.g. 'SEK'.")
     purchase_date: str | None = Field(default=None, description="YYYY-MM-DD, or null.")
+
+
+# Asking for one product page, from the maker or a real retailer, in the owner's own market.
+# The locale preference matters: without it the answer comes back as ikea.com/us, whose prices
+# and article numbers are not the ones on the receipt.
+FIND_PAGE_PROMPT = (
+    "Find the page on the maker's or a retailer's own website that sells exactly this "
+    "product, for someone shopping in Sweden — prefer a .se site, then .eu, then .com. "
+    "It must be the page for this one product, not a category, search or home page. "
+    "Reply with the single URL and nothing else. If you cannot find one, reply NONE."
+)
+_URL_PATTERN = re.compile(r"https?://[^\s<>\"')\]]+")
+
+
+def find_product_page(note: str, settings: Settings) -> str | None:
+    """Search the web for the product page for something the owner described in words.
+
+    Only a candidate. The caller must fetch it and check that the page is actually about this
+    product before believing anything on it — a wrong URL does not reliably 404, it redirects
+    to a catalogue page and answers 200.
+
+    Returns None rather than raising: an item without a photo is a normal outcome.
+    """
+    from google.genai import types
+
+    try:
+        response = _client(settings.gcp_project, settings.gemini_location).models.generate_content(
+            model=settings.gemini_model,
+            contents=[f"{FIND_PAGE_PROMPT}\n\nProduct: {note}"],
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
+                http_options=types.HttpOptions(
+                    timeout=int(settings.find_page_timeout_seconds * 1000)
+                ),
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - deliberately swallowed; see the docstring
+        logger.info("Could not search for a product page: %s", exc)
+        return None
+
+    match = _URL_PATTERN.search(response.text or "")
+    return match.group(0).rstrip(".,") if match else None
 
 
 class ExtractionUnavailable(Exception):
