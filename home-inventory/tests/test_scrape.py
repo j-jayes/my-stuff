@@ -155,11 +155,27 @@ def test_a_plain_string_image_in_structured_data_is_understood():
     )
 
 
-def test_the_meta_tag_still_wins_when_it_has_a_value():
+def test_the_product_photograph_beats_the_sharing_card():
+    """og:image is what a shop wants shown on social media, and shops crop it to fit: Asket
+    serves `...thumbnail-original.jpg?w=1200&h=630` there — a strip across the middle of a
+    shirt with no collar and no hem — while its schema.org block names the real 2000x3000
+    photograph. A picture of the thing beats a picture made to fill a banner.
+    """
+    html = """
+    <html><head>
+      <meta property="og:image" content="https://cdn.example.com/og.jpg?w=1200&h=630">
+      <script type="application/ld+json">{"@type":"Product","image":"https://cdn.example.com/ld.jpg"}</script>
+    </head></html>
+    """
+    assert extract_metadata(html, "https://e.com/").image_url == "https://cdn.example.com/ld.jpg"
+
+
+def test_the_sharing_card_is_used_when_there_is_no_product_photograph():
+    """Most pages carry no schema.org image at all, and og:image is all there is."""
     html = """
     <html><head>
       <meta property="og:image" content="https://cdn.example.com/og.jpg">
-      <script type="application/ld+json">{"@type":"Product","image":"https://cdn.example.com/ld.jpg"}</script>
+      <script type="application/ld+json">{"@type":"Product","name":"A thing"}</script>
     </head></html>
     """
     assert extract_metadata(html, "https://e.com/").image_url == "https://cdn.example.com/og.jpg"

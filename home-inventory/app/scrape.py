@@ -194,8 +194,9 @@ def _safe_image_url(candidate: str | None, page_url: str) -> str | None:
 def _structured_image(soup: BeautifulSoup) -> str | None:
     """The product photograph out of a schema.org block.
 
-    Worth the trouble because some pages — IKEA's among them — serve
-    `<meta property="og:image" content="">` while the JSON-LD still carries the real image.
+    Preferred over og:image, which is a sharing card: IKEA serves
+    `<meta property="og:image" content="">` on some pages, and Asket serves the product cropped
+    to a 1200x630 banner. This names the photograph itself.
     `image` may be a bare URL, a list, or ImageObjects; take the first thing that looks usable.
     """
     for script in soup.find_all("script", type="application/ld+json"):
@@ -253,7 +254,10 @@ def extract_metadata(html: str, page_url: str) -> PageMetadata:
     if not title and soup.title and soup.title.string:
         title = soup.title.string.strip()
 
-    image = meta(property="og:image") or meta(name="twitter:image") or _structured_image(soup)
+    # The schema.org photograph first, because og:image is the sharing card and shops crop it
+    # to a banner: Asket's is the same shirt forced to 1200x630, which is a strip across the
+    # middle with no collar and no hem. Only the meta tags are left when there is no such block.
+    image = _structured_image(soup) or meta(property="og:image") or meta(name="twitter:image")
 
     return PageMetadata(
         title=title or None,
