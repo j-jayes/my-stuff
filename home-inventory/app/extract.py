@@ -32,6 +32,14 @@ SYSTEM_INSTRUCTION = (
     "photo — never guess a brand from the style of an object.\n"
     "Cutlery is what goes on the table; Kitchen Knives and Kitchen Tools & Utensils are what "
     "you cook with.\n"
+    "Clothing is shelved by the part of an outfit it fills, which is not what a garment is "
+    "called: Tops is anything worn on the upper body — shirts, t-shirts, jumpers, blouses; "
+    "Bottoms is anything worn on the lower body — trousers, jeans, shorts, skirts. Outerwear "
+    "goes over the top to go outside; Shoes is anything worn on the feet; Accessories is "
+    "belts, hats, scarves and bags. Every garment belongs on one of these.\n"
+    "Name the room a thing is kept in even when nobody says so, where it is obvious from what "
+    "the thing is: clothes and shoes live in a closet, pans live in a kitchen. Leave it null "
+    "when it could reasonably be in several — a picture frame or a chair could be anywhere.\n"
     "purchase_date is YYYY-MM-DD. A month with no day is the 1st of that month; a year on its "
     "own is 1 January. Never return a date later than today. If the wording is vague — "
     "'last summer', 'a while ago' — return null rather than a guess.\n"
@@ -59,7 +67,9 @@ class ItemSuggestion(BaseModel):
     subcategory: str | None = Field(
         default=None, description="The best-fitting subcategory, or null if none applies."
     )
-    room: str | None = Field(default=None, description="Where in the home it is, if stated.")
+    room: str | None = Field(
+        default=None, description="The room it is kept in, or null if it could be several."
+    )
     brand: str | None = Field(default=None, description="Brand or maker, only if known.")
     descriptor_notes: str | None = Field(
         default=None, description="One short sentence on colour, material, or notable features."
@@ -233,6 +243,23 @@ def _client(project: str, location: str):
     return genai.Client(vertexai=True, project=project, location=location)
 
 
+def _constrain(prop: dict, values: list[str]) -> None:
+    """Restrict one schema property to the owner's own list of names.
+
+    Where the field is optional, pydantic writes it as `anyOf: [string, null]`, and an enum set
+    beside that anyOf constrains nothing — which is why the two optional fields were the two
+    that misbehaved: a subcategory of "Symaskin", in nobody's list, and a lower-cased "closet".
+    The list belongs on the string branch itself. Nullability is already carried by the null
+    branch, so it does not go in the list.
+
+    The caller still resolves what comes back. A constraint the model honours is not the same
+    as one it cannot break.
+    """
+    for branch in prop.get("anyOf", [prop]):
+        if branch.get("type") == "string":
+            branch["enum"] = values
+
+
 def suggest_item(
     settings: Settings,
     *,
@@ -253,14 +280,10 @@ def suggest_item(
     if image is None and not page and not note:
         raise ValueError("Nothing to work from: supply a photo, a page, or a note")
 
-    # Constraining these to the owner's actual lists steers the model hard, but it is not a
-    # guarantee: it has been observed returning a subcategory that was not on the list at all,
-    # and echoing the note's casing rather than the list's. The caller resolves what comes
-    # back rather than trusting it.
     schema = ItemSuggestion.model_json_schema()
-    schema["properties"]["category"]["enum"] = categories
-    schema["properties"]["subcategory"]["enum"] = [*subcategories, None]
-    schema["properties"]["room"]["enum"] = [*rooms, None]
+    _constrain(schema["properties"]["category"], categories)
+    _constrain(schema["properties"]["subcategory"], subcategories)
+    _constrain(schema["properties"]["room"], rooms)
 
     contents: list = []
     if image is not None:

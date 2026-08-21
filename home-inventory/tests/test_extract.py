@@ -127,8 +127,16 @@ def test_the_owners_own_lists_are_the_only_answers_allowed(stub):
 
     schema = stub.models.calls[0]["config"].response_json_schema
     assert schema["properties"]["category"]["enum"] == ["Kitchenware", "Furniture"]
-    assert schema["properties"]["subcategory"]["enum"] == ["Kitchen Knives", "Cookware", None]
-    assert schema["properties"]["room"]["enum"] == ["Kitchen", "Lounge", None]
+
+    # An optional field is anyOf[string, null], and an enum set beside that anyOf constrains
+    # nothing: it is why "Symaskin" and a lower-cased "closet" came back from fields that were
+    # supposedly enumerated. The list has to sit on the string branch, and null stays available
+    # through the branch that already expresses it.
+    for field, expected in (("subcategory", ["Kitchen Knives", "Cookware"]), ("room", ["Kitchen", "Lounge"])):
+        branches = schema["properties"][field]["anyOf"]
+        assert [b for b in branches if b.get("type") == "string"][0]["enum"] == expected
+        assert any(b.get("type") == "null" for b in branches)
+        assert "enum" not in schema["properties"][field]
 
 
 def test_the_answer_comes_back_as_an_item(stub):
@@ -397,3 +405,69 @@ def test_a_real_photograph_becomes_a_real_product_photo():
     image = Image.open(io.BytesIO(data))
     image.verify()
     assert min(image.size) > 200
+
+
+# The seeded lists a real request carries, trimmed to what these cases could plausibly choose.
+WARDROBE = {
+    "categories": ["Clothing & Accessories", "Kitchenware", "Furniture"],
+    "subcategories": ["Tops", "Bottoms", "Outerwear", "Shoes", "Accessories", "Cookware"],
+    "rooms": ["Closet", "Kitchen", "Lounge", "Bedroom"],
+}
+
+
+def _shelf(suggestion) -> str | None:
+    """Read the answer the way the router does. The model echoes its own casing — "closet" for
+    Closet — so a raw string comparison fails on an answer the app handles perfectly well."""
+    return resolve_name(WARDROBE["subcategories"], suggestion.subcategory)
+
+
+def _room(suggestion) -> str | None:
+    return resolve_name(WARDROBE["rooms"], suggestion.room)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("note", "expected"),
+    [
+        ("Asket oxford cloth button down shirt in blue", "Tops"),
+        ("Uniqlo supima cotton t-shirt in white", "Tops"),
+        ("Orslow 105 standard jeans", "Bottoms"),
+        ("Asket wool trousers in dark navy", "Bottoms"),
+        ("a pair of black leather chelsea boots", "Shoes"),
+        ("a navy wool overcoat", "Outerwear"),
+        ("a brown leather belt", "Accessories"),
+    ],
+)
+def test_a_garment_lands_on_the_shelf_for_the_part_of_the_outfit_it_fills(note, expected):
+    """The shelves are named for what an outfit is made of, and nobody calls a shirt a "top".
+    Shoes and Outerwear are guessed from the words alone; Tops and Bottoms have to be
+    explained, or every shirt and every pair of jeans stops at the parent category.
+    """
+    suggestion = suggest_item(Settings(), note=note, **WARDROBE)
+
+    assert suggestion.subcategory == expected
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("note", "expected"),
+    [
+        ("Asket oxford cloth button down shirt in blue", "Closet"),
+        ("a pair of black leather chelsea boots", "Closet"),
+        ("a cast iron casserole", "Kitchen"),
+    ],
+)
+def test_the_room_a_thing_obviously_lives_in_is_offered(note, expected):
+    """Clothes live in the closet and pans live in the kitchen. Saying so is a suggestion in a
+    form the owner edits, and filling it in beats making them pick the same room every time."""
+    suggestion = suggest_item(Settings(), note=note, **WARDROBE)
+
+    assert suggestion.room == expected
+
+
+@pytest.mark.integration
+def test_a_thing_that_could_be_anywhere_is_not_given_a_room():
+    """The other half of it: a guess is only worth offering where it is nearly certain."""
+    suggestion = suggest_item(Settings(), note="a small brass picture frame", **WARDROBE)
+
+    assert suggestion.room is None
