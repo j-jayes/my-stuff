@@ -1,7 +1,7 @@
 import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { type ItemSummary, api } from '../api'
+import { type ItemSummary, type TaxonomyEntry, api } from '../api'
 import { BackIcon } from '../components/Icons'
 
 /** Placements are stored in a fixed 1000x1000 unit space, so a board arranged on a laptop
@@ -25,6 +25,12 @@ export default function BoardCanvas() {
   const [name, setName] = useState('')
   const [placed, setPlaced] = useState<Placed[]>([])
   const [inventory, setInventory] = useState<ItemSummary[]>([])
+  const [rooms, setRooms] = useState<TaxonomyEntry[]>([])
+  const [categories, setCategories] = useState<TaxonomyEntry[]>([])
+  // The tray holds one page of things. A wardrobe fills that on its own, so narrowing it is
+  // what makes picking an outfit possible at all.
+  const [roomId, setRoomId] = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -43,8 +49,20 @@ export default function BoardCanvas() {
         })),
       )
     })
-    api.items({ limit: 200 }).then((page) => setInventory(page.items.filter((i) => i.thumb_url)))
   }, [id])
+
+  useEffect(() => {
+    api.rooms().then(setRooms).catch(() => setRooms([]))
+    api.categories().then(setCategories).catch(() => setCategories([]))
+  }, [])
+
+  useEffect(() => {
+    // Selecting a parent category brings its shelves with it; the server rolls them up.
+    api
+      .items({ room_id: roomId || undefined, category_id: categoryId || undefined, limit: 200 })
+      .then((page) => setInventory(page.items.filter((i) => i.thumb_url)))
+      .catch(() => setInventory([]))
+  }, [roomId, categoryId])
 
   function toCanvasUnits(clientX: number, clientY: number) {
     const box = canvasRef.current!.getBoundingClientRect()
@@ -212,6 +230,44 @@ export default function BoardCanvas() {
 
         <div>
           <span className="eyebrow">Your things</span>
+          <div className="row">
+            <label>
+              <span>Room</span>
+              <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+                <option value="">Anywhere</option>
+                {rooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Category</span>
+              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <option value="">Anything</option>
+                {categories
+                  .filter((category) => !category.parent_id)
+                  .map((parent) => {
+                    const children = categories.filter((c) => c.parent_id === parent.id)
+                    return children.length === 0 ? (
+                      <option key={parent.id} value={parent.id}>
+                        {parent.name}
+                      </option>
+                    ) : (
+                      <optgroup key={parent.id} label={parent.name}>
+                        <option value={parent.id}>All {parent.name}</option>
+                        {children.map((child) => (
+                          <option key={child.id} value={child.id}>
+                            {child.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  })}
+              </select>
+            </label>
+          </div>
           <div className="tray">
             {inventory.map((item) => (
               <img
@@ -225,7 +281,11 @@ export default function BoardCanvas() {
             ))}
           </div>
           {inventory.length === 0 && (
-            <p className="muted">Photograph some things first and they will appear here.</p>
+            <p className="muted">
+              {roomId || categoryId
+                ? 'Nothing photographed matches that filter.'
+                : 'Photograph some things first and they will appear here.'}
+            </p>
           )}
         </div>
       </div>
