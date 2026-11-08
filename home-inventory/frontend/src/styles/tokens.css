@@ -107,6 +107,24 @@
    * change with the theme. Product photography is shot on white, so anything else puts a seam
    * around the picture where the padding meets its own background. */
   --photo-mat: #ffffff;
+
+  /* ---- charts ---- Five steps of the house blue for "how much", lightest is least, each with
+   * the ink that stays readable on it. Blue and orange tell new from second-hand, and pass the
+   * colour-blindness check against this surface. */
+  --seq-0: var(--surface-sunken);
+  --seq-0-ink: var(--muted);
+  --seq-1: #e6f0f8;
+  --seq-1-ink: #26262a;
+  --seq-2: #c6deef;
+  --seq-2-ink: #26262a;
+  --seq-3: #93c3e2;
+  --seq-3-ink: #26262a;
+  --seq-4: #2f7aa5;
+  --seq-4-ink: #ffffff;
+  --seq-5: #155a7c;
+  --seq-5-ink: #ffffff;
+  --series-new: #2a78d6;
+  --series-used: #eb6834;
   color-scheme: light dark;
 }
 
@@ -133,5 +151,19 @@
     --danger-soft: #3a2320;
 
     --shadow-raised: none;
+
+    /* On a dark ground, more is brighter. */
+    --seq-1: #1b3243;
+    --seq-1-ink: #f2f2ee;
+    --seq-2: #234c66;
+    --seq-2-ink: #f2f2ee;
+    --seq-3: #2f6f93;
+    --seq-3-ink: #f2f2ee;
+    --seq-4: #7cc0e4;
+    --seq-4-ink: #10222e;
+    --seq-5: #b8def3;
+    --seq-5-ink: #10222e;
+    --series-new: #3987e5;
+    --series-used: #d95926;
   }
 }

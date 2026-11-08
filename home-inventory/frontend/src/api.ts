@@ -21,6 +21,21 @@ export type ItemSummary = {
 /** Amounts are in minor units, per currency. Nothing is converted. */
 export type StatRow = { label: string; entries: number; spent: Record<string, number> }
 
+export type StatItem = {
+  id: string
+  name: string
+  brand: string | null
+  shop: string
+  room: string | null
+  category: string | null
+  minor: number | null
+  currency: string | null
+  quantity: number
+  date: string | null
+  second_hand: boolean
+  thumb_url: string | null
+}
+
 export type Stats = {
   entries: number
   units: number
@@ -28,11 +43,8 @@ export type Stats = {
   totals: Record<string, number>
   second_hand_entries: number
   second_hand_totals: Record<string, number>
-  by_shop: StatRow[]
-  by_category: StatRow[]
-  by_room: StatRow[]
-  by_year: StatRow[]
-  most_expensive: { id: string; name: string; brand: string | null; minor: number; currency: string }[]
+  items: StatItem[]
+  gifts: StatRow[]
 }
 
 export type ItemDetail = ItemSummary & {
