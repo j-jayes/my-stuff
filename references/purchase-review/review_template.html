@@ -1,0 +1,150 @@
+<title>Purchase Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&family=DM+Mono&display=swap">
+<style>
+/* Layout: a stock-take sheet. Sticky tally on top, one shelf of tagged items per order. */
+:root{--bg:#eef1f5;--card:#fff;--fg:#17212f;--muted:#5b6778;--line:#d4dbe5;--accent:#1f4fd1;--accent-fg:#fff;
+--keep:#14704a;--keep-bg:#dcf2e6;--ret:#94570a;--ret-bg:#fbeacd;--gone:#4b5563;--gone-bg:#e4e7ec;--have:#1f4fd1;--have-bg:#dde6fb;
+--display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;--body:"Figtree",ui-sans-serif,system-ui,sans-serif;--mono:"DM Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121821;--card:#1b2431;--fg:#e8edf4;--muted:#9eabbd;--line:#2f3b4c;--accent:#8fb0ff;--accent-fg:#101827;
+--keep:#7fdcae;--keep-bg:#173d2c;--ret:#f3c27a;--ret-bg:#46320f;--gone:#c3cad5;--gone-bg:#333d4b;--have:#a9c1ff;--have-bg:#22345e;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121821;--card:#1b2431;--fg:#e8edf4;--muted:#9eabbd;--line:#2f3b4c;--accent:#8fb0ff;--accent-fg:#101827;
+--keep:#7fdcae;--keep-bg:#173d2c;--ret:#f3c27a;--ret-bg:#46320f;--gone:#c3cad5;--gone-bg:#333d4b;--have:#a9c1ff;--have-bg:#22345e;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 64px}
+h1{font:700 clamp(28px,5vw,40px)/1.1 var(--display);margin:0 0 6px;text-wrap:balance}
+.lede{color:var(--muted);margin:0 0 18px;max-width:65ch}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.tally{display:flex;flex-wrap:wrap;gap:6px 18px;font:13px var(--mono);font-variant-numeric:tabular-nums}
+.tally b{font-weight:400;font-size:17px;margin-right:4px}
+.tally .todo b{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 13px var(--body);border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:99px;padding:4px 11px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.status{font-size:13px;color:var(--ret);margin:0}
+.order{padding-top:26px}
+.order header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin-bottom:10px}
+.order h2{font:600 19px var(--display);margin:0}
+.order .when{font:13px var(--mono);color:var(--muted)}
+.rest{margin-left:auto;font:500 13px var(--body);background:none;border:0;color:var(--accent);cursor:pointer;padding:2px 0;text-decoration:underline;text-underline-offset:3px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px}
+@media (max-width:440px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.item{background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.item.keep{border-color:var(--keep)}.item.returned{border-color:var(--ret)}.item.already{border-color:var(--have)}
+.item.gone{opacity:.72}
+.photo{aspect-ratio:1;background:#fff;display:grid;place-items:center;color:#667;font-size:12px}
+.photo img{width:100%;height:100%;object-fit:contain;display:block}
+.info{padding:9px 10px 8px;display:grid;gap:3px;flex:1;align-content:start;min-width:0}
+.brand{font-weight:600;overflow-wrap:anywhere}
+.name{overflow-wrap:anywhere;font-size:14px}
+.meta{font:12px var(--mono);color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 10px}
+.cat{font-size:12px;color:var(--muted)}
+.note{font-size:12px;border-radius:4px;padding:4px 6px;margin-top:3px}
+.note.r{background:var(--ret-bg);color:var(--ret)}.note.a{background:var(--have-bg);color:var(--have)}.note.p{background:var(--gone-bg);color:var(--fg)}
+.btns{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
+.btns button{font:500 12.5px var(--body);background:none;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--fg);padding:8px 2px;cursor:pointer}
+.btns button:nth-child(2n){border-right:0}.btns button:last-child{grid-column:1/-1;border-right:0;border-bottom:0}
+.btns [data-s="gift"][aria-pressed="true"]{background:var(--have-bg);color:var(--have);font-weight:600}
+.item.gift{border-color:var(--accent)}
+.giftto{border:0;border-top:1px solid var(--line);padding:8px 10px;font:13px var(--body);background:transparent;color:var(--fg);width:100%;box-sizing:border-box}
+.btns [data-s="keep"][aria-pressed="true"]{background:var(--keep-bg);color:var(--keep);font-weight:600}
+.btns [data-s="returned"][aria-pressed="true"]{background:var(--ret-bg);color:var(--ret);font-weight:600}
+.btns [data-s="gone"][aria-pressed="true"]{background:var(--gone-bg);color:var(--gone);font-weight:600}
+.btns [data-s="already"][aria-pressed="true"]{background:var(--have-bg);color:var(--have);font-weight:600}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.empty{color:var(--muted);padding:40px 0;text-align:center}
+</style>
+<div class="wrap">
+<h1>Purchase Review</h1>
+<p class="lede">Everything found in your order emails. Mark what you still own. Only items marked Keep get added to My Stuff, and your choices save as you go.</p>
+<div class="bar">
+<div class="tally" id="tally"></div>
+<div class="chips" id="filters"></div>
+<p class="status" id="status" hidden></p>
+</div>
+<div id="list"></div>
+</div>
+<script>
+const ITEMS = __DATA__;
+const LABEL = {keep:"Keep",returned:"Returned",gone:"No longer have",already:"Already added",gift:"Gift"};
+const giftTo = {};
+const state = Object.fromEntries(ITEMS.map(i => [i.id, i.default]));
+let db = null, filter = "todo";
+const money = i => i.price.toLocaleString("sv-SE",{maximumFractionDigits:2}) + " " + i.currency;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shops = [...new Set(ITEMS.map(i => i.shop))];
+const FILTERS = [["todo","To decide"],["flag","Flagged"],["all","All"],...shops.map(s => ["shop:"+s, s])];
+function visible(i){
+  if (filter === "todo") return !state[i.id];
+  if (filter === "flag") return i.returned || i.already || i.possible;
+  if (filter.startsWith("shop:")) return i.shop === filter.slice(5);
+  return true;
+}
+function card(i){
+  const s = state[i.id];
+  return `<article class="item ${s||""}" data-id="${i.id}">
+  <div class="photo">${i.thumb ? `<img alt="" loading="lazy" src="data:image/jpeg;base64,${i.thumb}">` : "No photo in email"}</div>
+  <div class="info"><div class="brand">${esc(i.brand || i.shop)}</div><div class="name">${esc(i.name)}</div>
+  <div class="meta">${i.size ? `<span>Size ${esc(i.size)}</span>` : ""}<span>${money(i)}</span>${i.qty > 1 ? `<span>x${i.qty}</span>` : ""}</div>
+  <div class="cat">${esc(i.category)}${i.second_hand ? " · second-hand" : ""}</div>
+  ${i.returned ? `<div class="note r">${esc(i.returned)}</div>` : ""}
+  ${i.already ? `<div class="note a">In My Stuff: ${esc(i.already)}</div>` : ""}
+  ${i.possible ? `<div class="note p">Could be: ${esc(i.possible)}</div>` : ""}</div>
+  <div class="btns">${Object.entries(LABEL).map(([k,v]) => `<button type="button" data-s="${k}" aria-pressed="${s===k}">${v}</button>`).join("")}</div>
+  <input class="giftto" id="to-${i.id}" aria-label="Who is this gift for" placeholder="Who for? (optional)" value="${esc(giftTo[i.id] || "")}" ${s === "gift" ? "" : "hidden"}></article>`;
+}
+function render(){
+  const orders = new Map();
+  for (const i of ITEMS) if (visible(i)) { if(!orders.has(i.order)) orders.set(i.order, []); orders.get(i.order).push(i); }
+  const html = [...orders.values()].sort((a,b) => b[0].date.localeCompare(a[0].date)).map(g => {
+    const undecided = g.some(i => !state[i.id]);
+    return `<section class="order" data-order="${esc(g[0].order)}"><header><h2>${esc(g[0].shop)}</h2><span class="when">${g[0].date}</span>${undecided ? `<button type="button" class="rest">Keep the rest of this order</button>` : ""}</header><div class="grid">${g.map(card).join("")}</div></section>`;
+  }).join("");
+  document.getElementById("list").innerHTML = html || `<p class="empty">Nothing left here. Tell Claude when you are done.</p>`;
+  tally();
+}
+function tally(){
+  const c = {keep:0,returned:0,gone:0,already:0,gift:0,todo:0};
+  for (const i of ITEMS) c[state[i.id] || "todo"]++;
+  document.getElementById("tally").innerHTML = `<span class="todo"><b>${c.todo}</b>to decide</span>` + Object.entries(LABEL).map(([k,v]) => `<span><b>${c[k]}</b>${v}</span>`).join("");
+}
+function chips(){
+  document.getElementById("filters").innerHTML = FILTERS.map(([k,v]) => `<button type="button" class="chip" data-f="${esc(k)}" aria-pressed="${filter===k}">${esc(v)}</button>`).join("");
+}
+function status(msg){ const e = document.getElementById("status"); e.hidden = !msg; e.textContent = msg || ""; }
+async function save(id, s){
+  state[id] = s;
+  if (!db) { status("Choices can't be saved in this view. Open the page signed in to claude.ai."); return; }
+  try { await db.collection("decisions").doc(id).set(s === "gift" ? {state:s, gift_to:giftTo[id] || null} : {state:s}); status(""); }
+  catch (e) { status("That choice didn't save. Check your connection and press it again."); }
+}
+document.addEventListener("click", e => {
+  const f = e.target.closest("[data-f]");
+  if (f) { filter = f.dataset.f; chips(); render(); window.scrollTo({top:0}); return; }
+  const b = e.target.closest("[data-s]");
+  if (b) {
+    const id = b.closest(".item").dataset.id; save(id, b.dataset.s);
+    const el = b.closest(".item"); el.className = "item " + b.dataset.s;
+    el.querySelector(".giftto").hidden = b.dataset.s !== "gift";
+    el.querySelectorAll("[data-s]").forEach(x => x.setAttribute("aria-pressed", x === b));
+    tally(); return;
+  }
+  const r = e.target.closest(".rest");
+  if (r) { const o = r.closest(".order").dataset.order; ITEMS.filter(i => i.order === o && !state[i.id]).forEach(i => save(i.id, "keep")); render(); }
+});
+document.addEventListener("change", e => {
+  const input = e.target.closest(".giftto");
+  if (input) { const id = input.closest(".item").dataset.id; giftTo[id] = input.value.trim(); save(id, "gift"); }
+});
+chips(); render();
+(async () => {
+  db = await window.claude?.use?.("db");
+  if (!db) { status("Choices can't be saved in this view. Open the page signed in to claude.ai."); return; }
+  db.collection("decisions").onSnapshot(snap => {
+    let changed = false;
+    snap.docs.forEach(d => { const s = d.data().state; if (state[d.id] !== s) { state[d.id] = s; changed = true; } const g = d.data().gift_to; if (g && giftTo[d.id] !== g) { giftTo[d.id] = g; changed = true; } });
+    if (changed) render();
+  }, () => status("Live updates stopped. Reload the page to see saved choices."));
+})();
+</script>

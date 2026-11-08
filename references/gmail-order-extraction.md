@@ -23,6 +23,10 @@ Worked out while importing clothing, Amazon and IKEA purchases into My Stuff.
 | Amazon | Body via `view=pt` | Newer titles are cut off with "...". Prices are per unit. |
 | IKEA in store | PDF attachment | Open Gmail's preview by clicking "Preview attachment", then read the viewer's `innerText`. No download. |
 | IKEA online | Body | Article numbers are in the email. |
+| Takealot | "Payment Confirmation" body, under "Items in this order" | Line prices are totals, so divide by the quantity. "Order Cancelled" and "Cancellation Notification" name the items; "Return Logged" does not. |
+| Naturkompaniet, HiFi Klubben, Nutribullet | PDF attachment | Same preview method as IKEA in store. |
+| Zettle receipts | Body | Often only an article code, so the item may need asking about. |
+| Amazon.se 2021, TeeShoppen | Nowhere | The email has totals or FAQ text only. |
 | Uniqlo | Nowhere | Only returns name their items. |
 
 Returns usually have their own email naming the item, so check for those before asking.
@@ -34,3 +38,9 @@ IKEA receipt article numbers work directly in IKEA's search API. See `home-inven
 `home-inventory/scripts/import_items.py` adds items and `apply_changes.py` creates rooms and corrects
 items, both through the API and both safe to re-run. Rehearse on a local server first. On this Mac
 ikea.com resolves to a private address, so IKEA photos fail locally but not on Cloud Run.
+
+## Reviewing and finding photos
+
+`references/purchase-review/review_template.html` is the review page (replace `__DATA__`; publish with the `db` capability and read the `decisions` collection). `references/photo-picker/` searches the web for three candidate photos per item and builds the page for choosing between them; marks go in the `choices` collection.
+
+Do not run a live import while a deploy is rolling out. The new instance can restore the database just before the old one's last save.
