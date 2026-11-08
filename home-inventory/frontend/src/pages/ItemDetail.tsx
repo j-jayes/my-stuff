@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { type ItemDetail as Item, api, formatPrice, lineTotal } from '../api'
+import { type ItemDetail as Item, type TaxonomyEntry, api, formatPrice, lineTotal } from '../api'
 import { BackIcon } from '../components/Icons'
 import ItemForm, { type FormValues, toPayload, valuesFromItem } from '../components/ItemForm'
 import PriceToggle from '../components/PriceToggle'
@@ -18,6 +18,11 @@ export default function ItemDetail() {
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [rooms, setRooms] = useState<TaxonomyEntry[]>([])
+
+  useEffect(() => {
+    api.rooms().then(setRooms).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!id) return
@@ -76,6 +81,22 @@ export default function ItemDetail() {
     }
   }
 
+  /** Saves straight away, so leaving something at another flat is one tap and not an edit. */
+  async function moveTo(roomId: string) {
+    if (!id) return
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await api.updateItem(id, { room_id: roomId || null })
+      setItem(updated)
+      setValues(valuesFromItem(updated))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not move that.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function giveAway() {
     if (!id) return
     const to = prompt('Who was it for? You can leave this blank.')
@@ -115,7 +136,7 @@ export default function ItemDetail() {
   }
 
   const specs: [string, string | null][] = [
-    ['Room', item.room?.name ?? null],
+    ['Room', item.gifted_at ? (item.room?.name ?? null) : null],
     ['Category', item.category?.name ?? null],
     ['Brand', item.brand],
     ['How many', item.quantity > 1 ? String(item.quantity) : null],
@@ -223,6 +244,24 @@ export default function ItemDetail() {
                 <p className="muted" style={{ marginTop: 'var(--s-4)' }}>
                   {item.descriptor_notes}
                 </p>
+              )}
+
+              {!item.gifted_at && (
+                <label className="move-room">
+                  <span>Room</span>
+                  <select
+                    value={item.room?.id ?? ''}
+                    onChange={(event) => moveTo(event.target.value)}
+                    disabled={busy}
+                  >
+                    <option value="">No room</option>
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
 
               <dl className="spec">

@@ -577,6 +577,13 @@ label > span {
   gap: var(--s-3);
 }
 
+.move-room {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
 .price-line {
   display: flex;
   align-items: center;
