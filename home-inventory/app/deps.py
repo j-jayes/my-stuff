@@ -56,6 +56,8 @@ def to_summary(item: Item) -> ItemSummary:
         currency=item.currency,
         quantity=item.quantity,
         created_at=item.created_at,
+        gifted_at=item.gifted_at,
+        gifted_to=item.gifted_to,
     )
 
 
@@ -72,6 +74,8 @@ def to_detail(item: Item) -> ItemDetail:
         image_url=media_url(item.image_key, item.updated_at),
         receipt_url=media_url(item.receipt_key, item.updated_at),
         source_photo_url=media_url(item.source_image_key, item.updated_at),
-        ai_suggested_fields=json.loads(item.ai_suggested_fields) if item.ai_suggested_fields else [],
+        ai_suggested_fields=json.loads(item.ai_suggested_fields)
+        if item.ai_suggested_fields
+        else [],
         updated_at=item.updated_at,
     )

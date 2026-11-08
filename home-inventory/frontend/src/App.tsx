@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 
 import { api } from './api'
-import { AddIcon, BoardsIcon, GalleryIcon, ItemsIcon } from './components/Icons'
+import { AddIcon, BoardsIcon, GalleryIcon, ItemsIcon, StatsIcon } from './components/Icons'
 import Sidebar from './components/Sidebar'
 import AddItem from './pages/AddItem'
 import BoardCanvas from './pages/BoardCanvas'
 import Boards from './pages/Boards'
 import Gallery from './pages/Gallery'
+import Gifts from './pages/Gifts'
 import Inventory from './pages/Inventory'
 import Settings from './pages/Settings'
+import Stats from './pages/Stats'
 import ItemDetail from './pages/ItemDetail'
 import Login from './pages/Login'
 
@@ -48,6 +50,8 @@ export default function App() {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/boards" element={<Boards />} />
           <Route path="/boards/:id" element={<BoardCanvas />} />
+          <Route path="/stats" element={<Stats />} />
+          <Route path="/gifts" element={<Gifts />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -69,6 +73,10 @@ export default function App() {
         <NavLink to="/boards">
           <BoardsIcon />
           Boards
+        </NavLink>
+        <NavLink to="/stats">
+          <StatsIcon />
+          Stats
         </NavLink>
       </nav>
     </div>

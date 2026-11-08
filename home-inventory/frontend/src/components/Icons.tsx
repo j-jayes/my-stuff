@@ -16,6 +16,19 @@ const base = (size: number) => ({
   focusable: false,
 })
 
+export const GiftIcon = ({ size = 20 }: Props) => (
+  <svg {...base(size)}>
+    <rect x="3.5" y="8" width="17" height="4" />
+    <path d="M5 12v8.5h14V12M12 8v12.5M12 8S10.5 3.5 8 3.5 5.5 8 8 8h4Zm0 0s1.5-4.5 4-4.5S18.5 8 16 8h-4Z" />
+  </svg>
+)
+
+export const StatsIcon = ({ size = 20 }: Props) => (
+  <svg {...base(size)}>
+    <path d="M4 20V11M12 20V4M20 20v-6" />
+  </svg>
+)
+
 export const ItemsIcon = ({ size = 20 }: Props) => (
   <svg {...base(size)}>
     <path d="M3 6h18M3 12h18M3 18h18" />

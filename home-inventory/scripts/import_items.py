@@ -50,19 +50,26 @@ def _ids_by_name(client: httpx.Client, path: str) -> dict[str, str]:
 
 
 def all_details(client: httpx.Client) -> list[dict]:
-    """Every item in full. Notes are only on the detail view, not on the list."""
-    details, offset = [], 0
-    while True:
-        response = client.get("/api/items", params={"limit": PAGE_SIZE, "offset": offset})
-        response.raise_for_status()
-        page = response.json()
-        for summary in page["items"]:
-            detail = client.get(f"/api/items/{summary['id']}")
-            detail.raise_for_status()
-            details.append(detail.json())
-        offset += PAGE_SIZE
-        if offset >= page["total"]:
-            return details
+    """Every item in full, gifts included, or a re-run would import a gift a second time.
+
+    Notes are only on the detail view, not on the list.
+    """
+    details = []
+    for gifted in ("false", "true"):
+        offset = 0
+        while True:
+            params = {"limit": PAGE_SIZE, "offset": offset, "gifted": gifted}
+            response = client.get("/api/items", params=params)
+            response.raise_for_status()
+            page = response.json()
+            for summary in page["items"]:
+                detail = client.get(f"/api/items/{summary['id']}")
+                detail.raise_for_status()
+                details.append(detail.json())
+            offset += PAGE_SIZE
+            if offset >= page["total"]:
+                break
+    return details
 
 
 def _existing_notes(client: httpx.Client) -> list[str]:
@@ -132,6 +139,10 @@ def run(
                     f"Stopped at {_label(item)}: {response.status_code} {response.text}. "
                     "Items before it were saved; re-running skips them."
                 )
+            if "gift_to" in item:
+                client.post(
+                    f"/api/items/{response.json()['id']}/gift", json={"to": item["gift_to"]}
+                ).raise_for_status()
         result["created"] += 1
         log(f"{'would add' if dry_run else 'added'}   {_label(item)}")
     return result

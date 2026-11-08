@@ -4,8 +4,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { type ItemDetail as Item, api, formatPrice, lineTotal } from '../api'
 import { BackIcon } from '../components/Icons'
 import ItemForm, { type FormValues, toPayload, valuesFromItem } from '../components/ItemForm'
+import PriceToggle from '../components/PriceToggle'
+import { usePricesVisible } from '../prices'
 
 export default function ItemDetail() {
+  const showPrices = usePricesVisible()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [item, setItem] = useState<Item | null>(null)
@@ -70,6 +73,29 @@ export default function ItemDetail() {
       setError(caught instanceof Error ? caught.message : 'Could not use that photo.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function giveAway() {
+    if (!id) return
+    const to = prompt('Who was it for? You can leave this blank.')
+    if (to === null) return
+    try {
+      await api.giftItem(id, to)
+      navigate('/gifts', { replace: true })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not mark that as a gift.')
+    }
+  }
+
+  async function bringBack() {
+    if (!id) return
+    try {
+      const updated = await api.takeGiftBack(id)
+      setItem(updated)
+      setValues(valuesFromItem(updated))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not bring that back.')
     }
   }
 
@@ -175,11 +201,22 @@ export default function ItemDetail() {
           ) : (
             <>
               <h1>{item.name}</h1>
-              {price && (
-                <p className="numeric" style={{ marginTop: 'var(--s-2)' }}>
-                  {price}
-                  {each && <span className="muted"> ({each} each)</span>}
+              {item.gifted_at && (
+                <p className="muted" style={{ marginTop: 'var(--s-2)' }}>
+                  {item.gifted_to ? `Given to ${item.gifted_to}` : 'Given away'}, and kept here as a
+                  record.
                 </p>
+              )}
+              {price && (
+                <div className="price-line">
+                  <PriceToggle />
+                  {showPrices && (
+                    <p className="numeric">
+                      {price}
+                      {each && <span className="muted"> ({each} each)</span>}
+                    </p>
+                  )}
+                </div>
               )}
 
               {item.descriptor_notes && (
@@ -209,6 +246,11 @@ export default function ItemDetail() {
 
               <div className="actions" style={{ marginTop: 'var(--s-6)' }}>
                 <button onClick={() => setEditing(true)}>Edit</button>
+                {item.gifted_at ? (
+                  <button onClick={bringBack}>Bring back</button>
+                ) : (
+                  <button onClick={giveAway}>Mark as gift</button>
+                )}
                 <button className="danger" onClick={remove}>
                   Delete
                 </button>

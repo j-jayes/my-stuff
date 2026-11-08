@@ -5,9 +5,11 @@
 
 changes.json has any of:
     rooms      names to create if they are not there yet
-    new_items  as for import_items.py; `ref` and `notes` replace the order for things without one
+    new_items  as for import_items.py; `ref` and `notes` replace the order for things without one,
+               and `gift_to` (a name, or null) records the item as already given away
     updates    a selector (`ref` in the notes, exact `name`, or `name_contains`, with `many: true`
-               if it may match several) plus `room` and/or `quantity`
+               if it may match several) plus any of `room`, `quantity`, `price` with `currency`,
+               or `gift: true` with an optional `gift_to`
 
 Every selector is checked before anything is written, and the whole file is safe to re-run.
 """
@@ -66,6 +68,9 @@ def run(client: httpx.Client, changes: dict, log: Callable[[str], None] = print)
 
     for update, found in targets:
         payload = {}
+        if "price" in update:
+            payload["purchase_price_minor"] = round(update["price"] * 100)
+            payload["currency"] = update["currency"]
         if "room" in update:
             if update["room"] not in rooms:
                 raise SystemExit(f"Unknown room {update['room']!r}")
@@ -73,16 +78,19 @@ def run(client: httpx.Client, changes: dict, log: Callable[[str], None] = print)
         if "quantity" in update:
             payload["quantity"] = update["quantity"]
         for item in found:
-            response = client.patch(
-                f"/api/items/{item['id']}", data={"payload": json.dumps(payload)}
-            )
-            if response.status_code != 200:
-                raise SystemExit(
-                    f"Stopped at {item['name']}: {response.status_code} {response.text}"
+            if payload:
+                response = client.patch(
+                    f"/api/items/{item['id']}", data={"payload": json.dumps(payload)}
                 )
-            log(
-                f"update  {item['name']}: {update.get('room') or ''} {update.get('quantity') or ''}"
-            )
+                if response.status_code != 200:
+                    raise SystemExit(
+                        f"Stopped at {item['name']}: {response.status_code} {response.text}"
+                    )
+            if update.get("gift"):
+                client.post(
+                    f"/api/items/{item['id']}/gift", json={"to": update.get("gift_to")}
+                ).raise_for_status()
+            log(f"update  {item['name']}: {sorted(set(update) - {'ref', 'name', 'many'})}")
 
 
 def main() -> None:

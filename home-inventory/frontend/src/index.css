@@ -571,6 +571,96 @@ label > span {
   color: var(--text);
 }
 
+.page-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.price-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+
+/* ---- stats ----------------------------------------------------------------------------- */
+
+.stat-heroes,
+.stat-grid {
+  display: grid;
+  gap: var(--s-5);
+}
+
+.stat-hero {
+  font-size: var(--step-3);
+  color: var(--text-strong);
+  line-height: 1.2;
+  margin: var(--s-2) 0;
+}
+
+.stat-section {
+  margin-top: var(--s-6);
+  min-width: 0;
+}
+
+.stat-list,
+.stat-top {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+}
+
+.stat-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--s-3);
+  padding: var(--s-2) 0;
+}
+
+.stat-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stat-value {
+  text-align: right;
+}
+
+.stat-track {
+  grid-column: 1 / -1;
+  height: 6px;
+}
+
+/* Square at the baseline, rounded at the end that carries the value. */
+.stat-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+
+.stat-top li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-2) 0;
+  border-bottom: var(--rule) solid var(--border);
+}
+
+.stat-top a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 720px) {
+  .stat-heroes,
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* A shelf inside a category: indented, and quieter than the parents it sits under. */
 .filter-list a.nested {
   padding-left: var(--s-5);

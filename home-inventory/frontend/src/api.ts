@@ -14,6 +14,25 @@ export type ItemSummary = {
   currency: string | null
   quantity: number
   created_at: string
+  gifted_at: string | null
+  gifted_to: string | null
+}
+
+/** Amounts are in minor units, per currency. Nothing is converted. */
+export type StatRow = { label: string; entries: number; spent: Record<string, number> }
+
+export type Stats = {
+  entries: number
+  units: number
+  unpriced: number
+  totals: Record<string, number>
+  second_hand_entries: number
+  second_hand_totals: Record<string, number>
+  by_shop: StatRow[]
+  by_category: StatRow[]
+  by_room: StatRow[]
+  by_year: StatRow[]
+  most_expensive: { id: string; name: string; brand: string | null; minor: number; currency: string }[]
 }
 
 export type ItemDetail = ItemSummary & {
@@ -101,6 +120,8 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 })
 
+type ItemFilters = { q?: string; room_id?: string; category_id?: string; gifted?: boolean }
+
 let roomsCache: Promise<TaxonomyEntry[]> | null = null
 let categoriesCache: Promise<TaxonomyEntry[]> | null = null
 
@@ -144,7 +165,23 @@ export const api = {
   deleteCategory: (id: string) =>
     request<void>(`/api/categories/${id}`, { method: 'DELETE' }).finally(invalidateTaxonomy),
 
-  items: (params: { q?: string; room_id?: string; category_id?: string; limit?: number }) => {
+  /** Every matching item. The server hands out at most 200 at a time. */
+  allItems: async (params: ItemFilters) => {
+    const items: ItemSummary[] = []
+    let total = 0
+    do {
+      const page = await api.items({ ...params, limit: 200, offset: items.length })
+      if (page.items.length === 0) break
+      items.push(...page.items)
+      total = page.total
+    } while (items.length < total)
+    return { items, total }
+  },
+  giftItem: (id: string, to: string | null) =>
+    request<ItemDetail>(`/api/items/${id}/gift`, json({ to })).finally(invalidateTaxonomy),
+  takeGiftBack: (id: string) =>
+    request<ItemDetail>(`/api/items/${id}/gift`, { method: 'DELETE' }).finally(invalidateTaxonomy),
+  items: (params: ItemFilters & { limit?: number; offset?: number }) => {
     const query = new URLSearchParams()
     for (const [key, value] of Object.entries(params)) {
       if (value) query.set(key, String(value))
@@ -152,6 +189,7 @@ export const api = {
     return request<{ items: ItemSummary[]; total: number }>(`/api/items?${query}`)
   },
   item: (id: string) => request<ItemDetail>(`/api/items/${id}`),
+  stats: () => request<Stats>('/api/stats'),
   brands: () => request<BrandEntry[]>('/api/items/brands'),
   similar: (name: string) =>
     request<ItemSummary[]>(`/api/items/similar?name=${encodeURIComponent(name)}`),

@@ -59,7 +59,7 @@ export default function BoardCanvas() {
   useEffect(() => {
     // Selecting a parent category brings its shelves with it; the server rolls them up.
     api
-      .items({ room_id: roomId || undefined, category_id: categoryId || undefined, limit: 200 })
+      .allItems({ room_id: roomId || undefined, category_id: categoryId || undefined })
       .then((page) => setInventory(page.items.filter((i) => i.thumb_url)))
       .catch(() => setInventory([]))
   }, [roomId, categoryId])

@@ -3,8 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 
 import { type ItemSummary, type TaxonomyEntry, api, formatPrice, lineTotal } from '../api'
 import { BoxIcon } from '../components/Icons'
+import PriceToggle from '../components/PriceToggle'
+import { usePricesVisible } from '../prices'
 
 export default function Inventory() {
+  const showPrices = usePricesVisible()
   const [params, setParams] = useSearchParams()
   const [items, setItems] = useState<ItemSummary[]>([])
   const [total, setTotal] = useState(0)
@@ -44,7 +47,7 @@ export default function Inventory() {
   useEffect(() => {
     setLoading(true)
     api
-      .items({ q: query, room_id: roomId, category_id: categoryId, limit: 200 })
+      .allItems({ q: query, room_id: roomId, category_id: categoryId })
       .then((page) => {
         setItems(page.items)
         setTotal(page.total)
@@ -77,7 +80,12 @@ export default function Inventory() {
     <>
       <div className="page-head">
         <h1>{heading}</h1>
-        <span className="muted numeric">{loading ? '' : `${total} item${total === 1 ? '' : 's'}`}</span>
+        <div className="page-tools">
+          <span className="muted numeric">
+            {loading ? '' : `${total} item${total === 1 ? '' : 's'}`}
+          </span>
+          <PriceToggle />
+        </div>
       </div>
 
       <input
@@ -172,7 +180,9 @@ export default function Inventory() {
                 <span className="tile-meta">
                   {[item.brand, item.room?.name].filter(Boolean).join(' · ') || '—'}
                 </span>
-                {price && <span className="tile-meta tile-price numeric">{price}</span>}
+                {showPrices && price && (
+                  <span className="tile-meta tile-price numeric">{price}</span>
+                )}
               </Link>
             )
           })}

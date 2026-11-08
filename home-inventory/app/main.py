@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db, deps
 from app.config import get_settings
-from app.routers import auth, boards, items, media, taxonomy
+from app.routers import auth, boards, items, media, stats, taxonomy
 from app.snapshot import StaleSnapshotError
 
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +48,7 @@ app.include_router(taxonomy.rooms_router)
 app.include_router(taxonomy.categories_router)
 app.include_router(boards.router)
 app.include_router(media.router)
+app.include_router(stats.router)
 
 
 if STATIC_DIR.is_dir():

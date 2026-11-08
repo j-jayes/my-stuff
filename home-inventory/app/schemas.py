@@ -89,6 +89,17 @@ class ItemSummary(BaseModel):
     currency: str | None
     quantity: int
     created_at: str
+    gifted_at: str | None
+    gifted_to: str | None
+
+
+class GiftWrite(BaseModel):
+    to: str | None = None
+
+    @field_validator("to")
+    @classmethod
+    def blank_means_nobody_named(cls, value: str | None) -> str | None:
+        return (value or "").strip() or None
 
 
 class ItemDetail(ItemSummary):

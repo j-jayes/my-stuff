@@ -83,6 +83,10 @@ class Item(Base):
     second_hand: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    # Set once the thing has been given away. It stops being part of the inventory but the row
+    # stays, so what it was and what it cost are not lost.
+    gifted_at: Mapped[str | None] = mapped_column(String)
+    gifted_to: Mapped[str | None] = mapped_column(String)
     purchase_date: Mapped[str | None] = mapped_column(String)
     serial_number: Mapped[str | None] = mapped_column(String)
     source_url: Mapped[str | None] = mapped_column(String)

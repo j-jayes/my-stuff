@@ -29,6 +29,7 @@ from app.imaging import UnreadableImage, extension_for, make_thumbnail
 from app.models import Category, Item, Room, new_id, utcnow
 from app.schemas import (
     BrandEntry,
+    GiftWrite,
     ItemDetail,
     ItemPage,
     ItemSummary,
@@ -169,12 +170,13 @@ def list_items(
     q: str | None = None,
     room_id: str | None = None,
     category_id: str | None = None,
+    gifted: bool = False,
     limit: int = 50,
     offset: int = 0,
     session: Session = Depends(get_session),
 ) -> ItemPage:
     limit = max(1, min(limit, 200))
-    filters = []
+    filters = [Item.gifted_at.is_not(None) if gifted else Item.gifted_at.is_(None)]
     if room_id:
         filters.append(Item.room_id == room_id)
     if category_id:
@@ -433,7 +435,9 @@ def list_similar(name: str, session: Session = Depends(get_session)) -> list[Ite
     matches = [
         item
         for item in session.scalars(
-            select(Item).options(joinedload(Item.room), joinedload(Item.category))
+            select(Item)
+            .where(Item.gifted_at.is_(None))
+            .options(joinedload(Item.room), joinedload(Item.category))
         )
         if wanted & _distinctive_words(item.name)
     ]
@@ -641,6 +645,30 @@ def accept_product_photo(
             storage.delete(old)
     storage.delete(key)
 
+    session.commit()
+    save_snapshot()
+    return to_detail(item)
+
+
+@router.post("/{item_id}/gift", response_model=ItemDetail)
+def give_item(item_id: str, body: GiftWrite, session: Session = Depends(get_session)) -> ItemDetail:
+    item = session.get(Item, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such item")
+    item.gifted_at = utcnow()
+    item.gifted_to = body.to
+    session.commit()
+    save_snapshot()
+    return to_detail(item)
+
+
+@router.delete("/{item_id}/gift", response_model=ItemDetail)
+def take_gift_back(item_id: str, session: Session = Depends(get_session)) -> ItemDetail:
+    item = session.get(Item, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such item")
+    item.gifted_at = None
+    item.gifted_to = None
     session.commit()
     save_snapshot()
     return to_detail(item)

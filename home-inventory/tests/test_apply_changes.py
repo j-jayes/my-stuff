@@ -76,6 +76,24 @@ def test_corrects_quantity_and_leaves_the_rest_of_the_item_alone(signed_in):
     assert updated["purchase_price_minor"] == 9900
 
 
+def test_corrects_a_price_without_touching_the_date(signed_in):
+    knife = create(
+        signed_in,
+        "All Steel brödkniv",
+        purchase_price_minor=60000,
+        currency="SEK",
+        purchase_date="2025-06-01",
+    )
+    changes = {"updates": [{"name": "All Steel brödkniv", "price": 499, "currency": "SEK"}]}
+
+    apply_changes.run(signed_in, changes, **quiet)
+
+    updated = item(signed_in, knife)
+    assert updated["purchase_price_minor"] == 49900
+    assert updated["currency"] == "SEK"
+    assert updated["purchase_date"] == "2025-06-01"
+
+
 def test_a_match_that_is_not_unique_stops_before_anything_changes(signed_in):
     first = create(signed_in, "Lamp one")
     create(signed_in, "Lamp two")

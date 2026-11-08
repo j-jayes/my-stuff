@@ -9,7 +9,7 @@ export default function Gallery() {
 
   useEffect(() => {
     api
-      .items({ limit: 200 })
+      .allItems({})
       .then((page) => setItems(page.items.filter((item) => item.thumb_url)))
       .finally(() => setLoading(false))
   }, [])

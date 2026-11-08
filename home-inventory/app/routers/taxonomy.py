@@ -62,7 +62,11 @@ def _build_router(
     @router.get("", response_model=list[TaxonomyEntry])
     def list_entries(session: Session = Depends(get_session)) -> list[TaxonomyEntry]:
         counts = dict(
-            session.execute(select(item_column, func.count(Item.id)).group_by(item_column)).all()
+            session.execute(
+                select(item_column, func.count(Item.id))
+                .where(Item.gifted_at.is_(None))
+                .group_by(item_column)
+            ).all()
         )
         entities = session.scalars(select(model).order_by(model.sort_order, model.name)).all()
         if hierarchical:

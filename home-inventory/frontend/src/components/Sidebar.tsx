@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useSearchParams } from 'react-router-dom'
 
 import { type TaxonomyEntry, api } from '../api'
-import { AddIcon, BoardsIcon, GalleryIcon, ItemsIcon, SettingsIcon } from './Icons'
+import { AddIcon, BoardsIcon, GalleryIcon, GiftIcon, ItemsIcon, SettingsIcon, StatsIcon } from './Icons'
 
 /** Desktop-only left rail: sections, then rooms and categories as filters.
  *
@@ -92,6 +92,12 @@ export default function Sidebar() {
           </NavLink>
           <NavLink to="/boards">
             <BoardsIcon /> Boards
+          </NavLink>
+          <NavLink to="/stats">
+            <StatsIcon /> Stats
+          </NavLink>
+          <NavLink to="/gifts">
+            <GiftIcon /> Gifts
           </NavLink>
           <NavLink to="/add">
             <AddIcon /> Add something
