@@ -1,10 +1,16 @@
 """Rooms, moves and corrections applied to items already in the inventory."""
 
+import io
 import json
 import sys
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
+
+from app.main import app
+from tests.conftest import PASSWORD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
@@ -27,6 +33,12 @@ def room_names(client):
 
 
 quiet = {"log": lambda _: None}
+
+
+def import_items_png():
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), "white").save(buffer, "PNG")
+    return buffer.getvalue()
 
 
 def test_makes_rooms_and_moves_every_matching_item(signed_in):
@@ -140,3 +152,101 @@ def test_new_items_can_go_straight_into_a_new_room_without_an_order(signed_in):
 def test_import_module_still_formats_order_references():
     line = {"shop": "IKEA", "order": "1", "line": 2}
     assert import_items._reference(line) == "IKEA order 1, line 2."
+
+
+def category_names(client):
+    return [c["name"] for c in client.get("/api/categories").json()]
+
+
+def test_makes_a_category_and_moves_items_into_it(signed_in, categories):
+    machine = create(signed_in, "Sewing machine", category_id=categories["Small Appliances"])
+    changes = {
+        "categories": ["Sewing Equipment"],
+        "updates": [{"name": "Sewing machine", "category": "Sewing Equipment"}],
+    }
+
+    apply_changes.run(signed_in, changes, **quiet)
+    apply_changes.run(signed_in, changes, **quiet)
+
+    assert category_names(signed_in).count("Sewing Equipment") == 1
+    assert item(signed_in, machine)["category"]["name"] == "Sewing Equipment"
+
+
+def test_a_move_to_an_unknown_category_stops_before_anything_changes(signed_in):
+    lamp = create(signed_in, "Lamp")
+    changes = {"updates": [{"name": "Lamp", "quantity": 2}, {"name": "Lamp", "category": "Nope"}]}
+
+    with pytest.raises(SystemExit, match="Nope"):
+        apply_changes.run(signed_in, changes, **quiet)
+
+    assert item(signed_in, lamp)["quantity"] == 1
+
+
+def test_a_category_can_be_made_inside_another(signed_in):
+    bike = create(signed_in, "Bike")
+    changes = {
+        "categories": ["Cycling", {"name": "Bikes", "parent": "Cycling"}],
+        "updates": [{"name": "Bike", "category": "Bikes"}],
+    }
+
+    apply_changes.run(signed_in, changes, **quiet)
+    apply_changes.run(signed_in, changes, **quiet)
+
+    rows = {c["name"]: c for c in signed_in.get("/api/categories").json()}
+    assert rows["Bikes"]["parent_id"] == rows["Cycling"]["id"]
+    assert item(signed_in, bike)["category"]["name"] == "Bikes"
+
+
+def test_an_item_can_be_picked_by_id_and_given_a_product_page(signed_in):
+    first, second = create(signed_in, "Socks"), create(signed_in, "Socks")
+    changes = {"updates": [{"id": second, "source_url": "https://example.com/socks"}]}
+
+    apply_changes.run(signed_in, changes, **quiet)
+
+    assert item(signed_in, second)["source_url"] == "https://example.com/socks"
+    assert item(signed_in, first)["source_url"] is None
+
+
+def test_a_photo_is_fetched_for_an_existing_item(signed_in, monkeypatch):
+    fetched = []
+
+    async def fake(url, timeout, max_bytes):
+        fetched.append(url)
+        return import_items_png(), "image/png"
+
+    monkeypatch.setattr("app.routers.items.download_image", fake)
+    lamp = create(signed_in, "Lamp")
+
+    apply_changes.run(
+        signed_in, {"updates": [{"id": lamp, "image_url": "https://example.com/a.png"}]}, **quiet
+    )
+
+    assert fetched == ["https://example.com/a.png"]
+    assert item(signed_in, lamp)["image_url"]
+
+
+def test_a_photo_that_cannot_be_fetched_is_reported_and_the_rest_still_happen(client, monkeypatch):
+    async def refused(url, timeout, max_bytes):
+        raise RuntimeError("403")
+
+    monkeypatch.setattr("app.routers.items.download_image", refused)
+    # A real deployment answers 500 here; the default test client would re-raise instead.
+    lenient = TestClient(app, raise_server_exceptions=False)
+    import_items.login(lenient, PASSWORD)
+    lamp, chair = create(lenient, "Lamp"), create(lenient, "Chair")
+    logged = []
+
+    apply_changes.run(
+        lenient,
+        {
+            "updates": [
+                {"id": lamp, "image_url": "https://example.com/a.png", "quantity": 2},
+                {"id": chair, "quantity": 3},
+            ]
+        },
+        log=logged.append,
+    )
+
+    assert item(lenient, lamp)["quantity"] == 2
+    assert item(lenient, chair)["quantity"] == 3
+    assert any(line.startswith("no photo") and "Lamp" in line for line in logged)
